@@ -74,6 +74,12 @@ if sys.version_info[0] >= 3:
 
 # pylint: disable=too-many-lines
 
+# not all the world is docker
+if os.path.exists('/bin/podman'):
+  CONTAINER_ENGINE = 'podman'
+else:
+  CONTAINER_ENGINE = 'docker'
+
 
 class Project:
   """Class representing a project that is in OSS-Fuzz or an external project
@@ -386,7 +392,7 @@ def check_project_exists(project):
 
 def _check_fuzzer_exists(project, fuzzer_name):
   """Checks if a fuzzer exists."""
-  command = ['docker', 'run', '--rm']
+  command = [CONTAINER_ENGINE, 'run', '--rm']
   command.extend(['-v', '%s:/out' % project.out])
   command.append(BASE_RUNNER_IMAGE)
 
@@ -525,8 +531,11 @@ def _workdir_from_dockerfile(project):
 
 
 def docker_run(run_args, print_output=True):
-  """Calls `docker run`."""
-  command = ['docker', 'run', '--rm', '--privileged']
+  """Call `docker run`."""
+  command = [CONTAINER_ENGINE, 'run', '--rm']
+
+  if CONTAINER_ENGINE != 'podman':
+    command.append('--privileged')
 
   # Support environments with a TTY.
   if sys.stdin.isatty():
@@ -549,7 +558,7 @@ def docker_run(run_args, print_output=True):
 
 def docker_build(build_args):
   """Calls `docker build`."""
-  command = ['docker', 'build']
+  command = [CONTAINER_ENGINE, 'build']
   command.extend(build_args)
   logging.info('Running: %s.', _get_command_string(command))
 
@@ -564,7 +573,7 @@ def docker_build(build_args):
 
 def docker_pull(image):
   """Call `docker pull`."""
-  command = ['docker', 'pull', image]
+  command = [CONTAINER_ENGINE, 'pull', image]
   logging.info('Running: %s', _get_command_string(command))
 
   try:
