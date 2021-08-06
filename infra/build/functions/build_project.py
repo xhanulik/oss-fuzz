@@ -62,6 +62,9 @@ LATEST_VERSION_CONTENT_TYPE = 'text/plain'
 
 QUEUE_TTL_SECONDS = 60 * 60 * 24  # 24 hours.
 
+PROJECTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                            'projects')
+
 
 def set_yaml_defaults(project_name, project_yaml, image_project):
   """Set project.yaml's default parameters."""
@@ -123,8 +126,8 @@ def load_project_yaml(project_name, project_yaml_path, image_project):
   return project_yaml
 
 
-def get_project_data(project_dir, image_project):
-  project_name = os.path.basename(project_dir)
+def get_project_data(project_name, image_project):
+  project_dir = os.path.join(PROJECTS_DIR, project_name)
   dockerfile_path = os.path.join(project_dir, 'Dockerfile')
   with open(dockerfile_path) as dockerfile:
     dockerfile_lines = dockerfile.readlines()
@@ -135,12 +138,11 @@ def get_project_data(project_dir, image_project):
 
 
 # pylint: disable=too-many-locals, too-many-statements, too-many-branches
-def get_build_steps(project_dir,
+def get_build_steps(project_name,
                     image_project, base_images_project, testing=False, branch=None, test_images=False):
   """Returns build steps for project."""
 
-  project_yaml, dockerfile_lines = get_project_data(project_dir, image_project)
-  project_name = os.path.basename(project_dir)
+  project_yaml, dockerfile_lines = get_project_data(project_name, image_project)
 
   if project_yaml['disabled']:
     logging.info('Project "%s" is disabled.', project_name)
@@ -450,7 +452,7 @@ def main():
   """Build and run projects."""
   parser = argparse.ArgumentParser('build_project.py',
                                    description='Builds a project on GCB')
-  parser.add_argument('project_dirs', help='Project directories.', nargs='+')
+  parser.add_argument('projects', help='Projects.', nargs='+')
   parser.add_argument('--testing', action='store_true', required=False,
                       default=False, help='Don\'t upload builds.')
   parser.add_argument('--test-images', action='store_true',
@@ -465,16 +467,13 @@ def main():
   base_images_project = 'oss-fuzz-base'
 
   # TODO(metzman): This script should accept project names not directories.
-  for project_dir in args.project_dirs:
-    # !!! Needed?
-    project_dir = project_dir.rstrip(os.path.sep)
-    steps = get_build_steps(project_dir,
+  for project in args.projects:
+    steps = get_build_steps(project,
                             image_project, base_images_project,
                             testing=args.testing, test_images=args.test_images,
                             branch=args.branch)
 
-    project_name = os.path.basename(project_dir)
-    run_build(steps, project_name, FUZZING_BUILD_TAG)
+    run_build(steps, project, FUZZING_BUILD_TAG)
 
 
 if __name__ == '__main__':
