@@ -205,9 +205,11 @@ def gsutil_rm_rf_step(url):
   }
   return step
 
+
 def get_pull_test_image_steps():
-  images = ['gcr.io/oss-fuzz-base/base-runner',
-            'gcr.io/oss-fuzz-base/base-builder']
+  images = [
+      'gcr.io/oss-fuzz-base/base-runner', 'gcr.io/oss-fuzz-base/base-builder'
+  ]
   steps = []
   for image in images:
     steps.append({
@@ -228,8 +230,8 @@ def get_pull_test_image_steps():
     })
   return steps
 
-def project_image_steps(name, image, language, branch=None,
-                        test_images=False):
+
+def project_image_steps(name, image, language, branch=None, test_images=False):
   """Returns GCB steps to build OSS-Fuzz project image."""
   clone_step = {
       'args': [

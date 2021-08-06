@@ -62,16 +62,14 @@ LATEST_VERSION_CONTENT_TYPE = 'text/plain'
 
 QUEUE_TTL_SECONDS = 60 * 60 * 24  # 24 hours.
 
-PROJECTS_DIR = os.path.abspath(os.path.join(__file__, os.path.pardir, os.path.pardir, os.path.pardir, os.path.pardir,
-                            'projects'))
+PROJECTS_DIR = os.path.abspath(
+    os.path.join(__file__, os.path.pardir, os.path.pardir, os.path.pardir,
+                 os.path.pardir, 'projects'))
 
 
-def set_yaml_defaults(project_name, project_yaml, image_project):
+def set_yaml_defaults(project_yaml):
   """Set project.yaml's default parameters."""
   project_yaml.setdefault('disabled', False)
-  project_yaml.setdefault('name', project_name)
-  project_yaml.setdefault('image',
-                          'gcr.io/{0}/{1}'.format(image_project, project_name))
   project_yaml.setdefault('architectures', DEFAULT_ARCHITECTURES)
   project_yaml.setdefault('sanitizers', DEFAULT_SANITIZERS)
   project_yaml.setdefault('fuzzing_engines', DEFAULT_ENGINES)
@@ -118,11 +116,11 @@ def workdir_from_dockerfile(dockerfile_lines):
   return None
 
 
-def load_project_yaml(project_name, project_yaml_path, image_project):
+def load_project_yaml(project_yaml_path, image_project):
   """Loads project yaml and sets default values."""
   with open(project_yaml_path, 'r') as project_yaml_file_handle:
     project_yaml = yaml.safe_load(project_yaml_file_handle)
-  set_yaml_defaults(project_name, project_yaml, image_project)
+  set_yaml_defaults(project_yaml, image_project)
   return project_yaml
 
 
@@ -132,14 +130,25 @@ def get_project_data(project_name, image_project):
   with open(dockerfile_path) as dockerfile:
     dockerfile_lines = dockerfile.readlines()
   project_yaml_path = os.path.join(project_dir, 'project.yaml')
-  project_yaml = load_project_yaml(project_name, project_yaml_path,
-                                   image_project)
+  project_yaml = load_project_yaml(project_yaml_path, image_project)
   return project_yaml, dockerfile_lines
+
+
+def get_project_image(image_project, project_name):
+  return 'gcr.io/{0}/{1}'.format(image_project, project_name)
+
+
+def get_out_dir(sanitizer):
+  return '/workspace/out/' + sanitizer
 
 
 # pylint: disable=too-many-locals, too-many-statements, too-many-branches
 def get_build_steps(project_name,
-                    image_project, base_images_project, testing=False, branch=None, test_images=False):
+                    image_project,
+                    base_images_project,
+                    testing=False,
+                    branch=None,
+                    test_images=False):
   """Returns build steps for project."""
 
   project_yaml, dockerfile_lines = get_project_data(project_name, image_project)
@@ -148,13 +157,16 @@ def get_build_steps(project_name,
     logging.info('Project "%s" is disabled.', project_name)
     return []
 
-  name = project_yaml['name']
-  image = project_yaml['image']
+  image = get_project_image(image_project, project_name)
   language = project_yaml['language']
   run_tests = project_yaml['run_tests']
-  time_stamp = datetime.datetime.now().strftime('%Y%m%d%H%M')
+  timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M')
 
-  build_steps = build_lib.project_image_steps(name, image, language, branch=branch, test_images=test_images)
+  build_steps = build_lib.project_image_steps(project_name,
+                                              image,
+                                              language,
+                                              branch=branch,
+                                              test_images=test_images)
   # # Copy over MSan instrumented libraries.
   # build_steps.append({
   #     'name': 'gcr.io/{0}/msan-libs-builder'.format(base_images_project),
@@ -176,15 +188,7 @@ def get_build_steps(project_name,
 
         env = CONFIGURATIONS['engine-' + fuzzing_engine][:]
         env.extend(CONFIGURATIONS['sanitizer-' + sanitizer])
-        out = '/workspace/out/' + sanitizer
-        stamped_name = '-'.join([name, sanitizer, time_stamp])
-        latest_version_file = '-'.join(
-            [name, sanitizer, LATEST_VERSION_FILENAME])
-        zip_file = stamped_name + '.zip'
-        stamped_srcmap_file = stamped_name + '.srcmap.json'
-        bucket = build_lib.ENGINE_INFO[fuzzing_engine].upload_bucket
-        if architecture != 'x86_64':
-          bucket += '-' + architecture
+        out = get_out_dir(sanitizer)
 
         env.append('OUT=' + out)
         # env.append('MSAN_LIBS_PATH=/workspace/msan')
@@ -204,7 +208,7 @@ def get_build_steps(project_name,
                        'python infra/helper.py build_fuzzers --sanitizer '
                        '{sanitizer} --engine {engine} --architecture '
                        '{architecture} {name}\n' + '*' * 80).format(
-                           name=name,
+                           name=project_name,
                            sanitizer=sanitizer,
                            engine=fuzzing_engine,
                            architecture=architecture)
@@ -256,7 +260,7 @@ def get_build_steps(project_name,
                          'python infra/helper.py check_build --sanitizer '
                          '{sanitizer} --engine {engine} --architecture '
                          '{architecture} {name}\n' + '*' * 80).format(
-                             name=name,
+                             name=project_name,
                              sanitizer=sanitizer,
                              engine=fuzzing_engine,
                              architecture=architecture)
@@ -289,7 +293,7 @@ def get_build_steps(project_name,
           })
 
         if sanitizer == 'dataflow' and fuzzing_engine == 'dataflow':
-          dataflow_steps = dataflow_post_build_steps(name, env,
+          dataflow_steps = dataflow_post_build_steps(project_name, env,
                                                      base_images_project)
           if dataflow_steps:
             build_steps.extend(dataflow_steps)
@@ -310,77 +314,90 @@ def get_build_steps(project_name,
                     'targets_list > /workspace/{0}'.format(
                         targets_list_filename),
                 ],
-            },
-            # zip binaries
-            {
-                'name':
-                    image,
-                'args': [
-                    'bash', '-c',
-                    'cd {out} && zip -r {zip_file} *'.format(out=out,
-                                                             zip_file=zip_file)
-                ],
-            }])
+            }
+        ])
         if not testing:
-          upload_url = build_lib.get_signed_url(
-              build_lib.GCS_UPLOAD_URL_FORMAT.format(bucket, name, zip_file))
-          srcmap_url = build_lib.get_signed_url(
-              build_lib.GCS_UPLOAD_URL_FORMAT.format(bucket, name,
-                                                   stamped_srcmap_file))
-          latest_version_url = build_lib.GCS_UPLOAD_URL_FORMAT.format(
-              bucket, name, latest_version_file)
-          latest_version_url = build_lib.get_signed_url(
-              latest_version_url, content_type=LATEST_VERSION_CONTENT_TYPE)
-
-          targets_list_url = build_lib.get_signed_url(
-              build_lib.get_targets_list_url(bucket, name, sanitizer))
-          upload_steps = [
-              # upload srcmap
-              {
-                  'name': 'gcr.io/{0}/uploader'.format(base_images_project),
-                  'args': [
-                      '/workspace/srcmap.json',
-                      srcmap_url,
-                  ],
-              },
-              # upload binaries
-              {
-                  'name': 'gcr.io/{0}/uploader'.format(base_images_project),
-                  'args': [
-                      os.path.join(out, zip_file),
-                      upload_url,
-                  ],
-              },
-              # upload targets list
-              {
-                  'name':
-                      'gcr.io/{0}/uploader'.format(base_images_project),
-                  'args': [
-                      '/workspace/{0}'.format(targets_list_filename),
-                      targets_list_url,
-                  ],
-              },
-              # upload the latest.version file
-              build_lib.http_upload_step(zip_file, latest_version_url,
-                                         LATEST_VERSION_CONTENT_TYPE),
-              # cleanup
-              {
-                  'name': image,
-                  'args': [
-                      'bash',
-                      '-c',
-                      'rm -r ' + out,
-                  ],
-              },
-          ]
+          upload_steps = get_upload_steps(project_name, sanitizer,
+                                          fuzzing_engine, architecture,
+                                          timestamp, base_images_project)
           build_steps.extend(upload_steps)
 
   return build_steps
 
 
-def get_upload_steps():
-  # TODO
-  pass
+def get_upload_steps(name, sanitizer, fuzzing_engine, architecture, timestamp,
+                     base_images_project):
+
+  bucket = build_lib.ENGINE_INFO[fuzzing_engine].upload_bucket
+  if architecture != 'x86_64':
+    bucket += '-' + architecture
+  stamped_name = '-'.join([name, sanitizer, timestamp])
+  zip_file = stamped_name + '.zip'
+  upload_url = build_lib.get_signed_url(
+      build_lib.GCS_UPLOAD_URL_FORMAT.format(bucket, name, zip_file))
+  stamped_srcmap_file = stamped_name + '.srcmap.json'
+  srcmap_url = build_lib.get_signed_url(
+      build_lib.GCS_UPLOAD_URL_FORMAT.format(bucket, name, stamped_srcmap_file))
+  latest_version_file = '-'.join([name, sanitizer, LATEST_VERSION_FILENAME])
+  latest_version_url = build_lib.GCS_UPLOAD_URL_FORMAT.format(
+      bucket, name, latest_version_file)
+  latest_version_url = build_lib.get_signed_url(
+      latest_version_url, content_type=LATEST_VERSION_CONTENT_TYPE)
+  targets_list_url = build_lib.get_signed_url(
+      build_lib.get_targets_list_url(bucket, name, sanitizer))
+  targets_list_filename = build_lib.get_targets_list_filename(sanitizer)
+  image = get_project_image(base_images_project, name)
+  out = get_out_dir(sanitizer)
+  upload_steps = [
+      # zip binaries
+      {
+          'name':
+              image,
+          'args': [
+              'bash', '-c',
+              'cd {out} && zip -r {zip_file} *'.format(out=out,
+                                                       zip_file=zip_file)
+          ],
+      },
+      # upload srcmap
+      {
+          'name': 'gcr.io/{0}/uploader'.format(base_images_project),
+          'args': [
+              '/workspace/srcmap.json',
+              srcmap_url,
+          ],
+      },
+      # upload binaries
+      {
+          'name': 'gcr.io/{0}/uploader'.format(base_images_project),
+          'args': [
+              os.path.join(out, zip_file),
+              upload_url,
+          ],
+      },
+      # upload targets list
+      {
+          'name':
+              'gcr.io/{0}/uploader'.format(base_images_project),
+          'args': [
+              '/workspace/{0}'.format(targets_list_filename),
+              targets_list_url,
+          ],
+      },
+      # upload the latest.version file
+      build_lib.http_upload_step(zip_file, latest_version_url,
+                                 LATEST_VERSION_CONTENT_TYPE),
+      # cleanup
+      {
+          'name': image,
+          'args': [
+              'bash',
+              '-c',
+              'rm -r ' + out,
+          ],
+      },
+  ]
+  return upload_steps
 
 
 def dataflow_post_build_steps(project_name, env, base_images_project):
@@ -453,14 +470,20 @@ def main():
   parser = argparse.ArgumentParser('build_project.py',
                                    description='Builds a project on GCB')
   parser.add_argument('projects', help='Projects.', nargs='+')
-  parser.add_argument('--testing', action='store_true', required=False,
-                      default=False, help='Don\'t upload builds.')
-  parser.add_argument('--test-images', action='store_true',
+  parser.add_argument('--testing',
+                      action='store_true',
                       required=False,
-                      default=False, help='Use testing base-images.')
+                      default=False,
+                      help='Don\'t upload builds.')
+  parser.add_argument('--test-images',
+                      action='store_true',
+                      required=False,
+                      default=False,
+                      help='Use testing base-images.')
   parser.add_argument('--branch',
                       required=False,
-                      default=None, help='Use specified OSS-Fuzz branch.')
+                      default=None,
+                      help='Use specified OSS-Fuzz branch.')
   args = parser.parse_args()
 
   image_project = 'oss-fuzz'
@@ -469,8 +492,10 @@ def main():
   # TODO(metzman): This script should accept project names not directories.
   for project in args.projects:
     steps = get_build_steps(project,
-                            image_project, base_images_project,
-                            testing=args.testing, test_images=args.test_images,
+                            image_project,
+                            base_images_project,
+                            testing=args.testing,
+                            test_images=args.test_images,
                             branch=args.branch)
 
     run_build(steps, project, FUZZING_BUILD_TAG)
