@@ -187,7 +187,7 @@ def get_build_steps(project_name,
           bucket += '-' + architecture
 
         env.append('OUT=' + out)
-        env.append('MSAN_LIBS_PATH=/workspace/msan')
+        # env.append('MSAN_LIBS_PATH=/workspace/msan')
         env.append('ARCHITECTURE=' + architecture)
         env.append('FUZZING_LANGUAGE=' + language)
 
