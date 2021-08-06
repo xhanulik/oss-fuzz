@@ -205,16 +205,48 @@ def gsutil_rm_rf_step(url):
   }
   return step
 
+def get_pull_test_image_steps():
+  images = ['gcr.io/oss-fuzz-base/base-runner',
+            'gcr.io/oss-fuzz-base/base-builder']
+  steps = []
+  for image in images:
+    steps.append({
+        'name': 'gcr.io/cloud-builders/docker',
+        'args': [
+            'pull',
+            image,
+        ],
+    })
+    test_image = image + '-testing'
+    steps.append({
+        'name': 'gcr.io/cloud-builders/docker',
+        'args': [
+            'tag',
+            image,
+            test_image,
+        ],
+    })
+  return steps
 
-def project_image_steps(name, image, language):
+def project_image_steps(name, image, language, branch=None,
+                        test_images=False):
   """Returns GCB steps to build OSS-Fuzz project image."""
-  steps = [{
+  clone_step = {
       'args': [
           'clone',
           'https://github.com/google/oss-fuzz.git',
       ],
       'name': 'gcr.io/cloud-builders/git',
-  }, {
+  }
+  if branch:
+    # Do this to support testing other branches.
+    clone_step['args'].extend(['--branch', branch])
+
+  steps = [clone_step]
+  if test_images:
+    steps.extend(get_pull_test_image_steps())
+
+  steps += [{
       'name': 'gcr.io/cloud-builders/docker',
       'args': [
           'build',

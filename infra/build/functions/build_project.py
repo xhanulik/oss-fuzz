@@ -21,6 +21,7 @@ Usage: build_project.py <project_dir>
 
 from __future__ import print_function
 
+import argparse
 import datetime
 import json
 import logging
@@ -60,12 +61,6 @@ LATEST_VERSION_FILENAME = 'latest.version'
 LATEST_VERSION_CONTENT_TYPE = 'text/plain'
 
 QUEUE_TTL_SECONDS = 60 * 60 * 24  # 24 hours.
-
-
-def usage():
-  """Exit with code 1 and display syntax to use this file."""
-  sys.stderr.write('Usage: ' + sys.argv[0] + ' <project_dir>\n')
-  sys.exit(1)
 
 
 def set_yaml_defaults(project_name, project_yaml, image_project):
@@ -120,19 +115,32 @@ def workdir_from_dockerfile(dockerfile_lines):
   return None
 
 
-def load_project_yaml(project_name, project_yaml_file, image_project):
+def load_project_yaml(project_name, project_yaml_path, image_project):
   """Loads project yaml and sets default values."""
-  project_yaml = yaml.safe_load(project_yaml_file)
+  with open(project_yaml_path, 'r') as project_yaml_file_handle:
+    project_yaml = yaml.safe_load(project_yaml_file_handle)
   set_yaml_defaults(project_name, project_yaml, image_project)
   return project_yaml
 
 
-# pylint: disable=too-many-locals, too-many-statements, too-many-branches
-def get_build_steps(project_name, project_yaml_file, dockerfile_lines,
-                    image_project, base_images_project):
-  """Returns build steps for project."""
-  project_yaml = load_project_yaml(project_name, project_yaml_file,
+def get_project_data(project_dir, image_project):
+  project_name = os.path.basename(project_dir)
+  dockerfile_path = os.path.join(project_dir, 'Dockerfile')
+  with open(dockerfile_path) as dockerfile:
+    dockerfile_lines = dockerfile.readlines()
+  project_yaml_path = os.path.join(project_dir, 'project.yaml')
+  project_yaml = load_project_yaml(project_name, project_yaml_path,
                                    image_project)
+  return project_yaml, dockerfile_lines
+
+
+# pylint: disable=too-many-locals, too-many-statements, too-many-branches
+def get_build_steps(project_dir,
+                    image_project, base_images_project, testing=False, branch=None, test_images=False):
+  """Returns build steps for project."""
+
+  project_yaml, dockerfile_lines = get_project_data(project_dir, image_project)
+  project_name = os.path.basename(project_dir)
 
   if project_yaml['disabled']:
     logging.info('Project "%s" is disabled.', project_name)
@@ -144,16 +152,16 @@ def get_build_steps(project_name, project_yaml_file, dockerfile_lines,
   run_tests = project_yaml['run_tests']
   time_stamp = datetime.datetime.now().strftime('%Y%m%d%H%M')
 
-  build_steps = build_lib.project_image_steps(name, image, language)
-  # Copy over MSan instrumented libraries.
-  build_steps.append({
-      'name': 'gcr.io/{0}/msan-libs-builder'.format(base_images_project),
-      'args': [
-          'bash',
-          '-c',
-          'cp -r /msan /workspace',
-      ],
-  })
+  build_steps = build_lib.project_image_steps(name, image, language, branch=branch, test_images=test_images)
+  # # Copy over MSan instrumented libraries.
+  # build_steps.append({
+  #     'name': 'gcr.io/{0}/msan-libs-builder'.format(base_images_project),
+  #     'args': [
+  #         'bash',
+  #         '-c',
+  #         'cp -r /msan /workspace',
+  #     ],
+  # })
 
   # Sort engines to make AFL first to test if libFuzzer has an advantage in
   # finding bugs first since it is generally built first.
@@ -175,20 +183,6 @@ def get_build_steps(project_name, project_yaml_file, dockerfile_lines,
         bucket = build_lib.ENGINE_INFO[fuzzing_engine].upload_bucket
         if architecture != 'x86_64':
           bucket += '-' + architecture
-
-        upload_url = build_lib.get_signed_url(
-            build_lib.GCS_UPLOAD_URL_FORMAT.format(bucket, name, zip_file))
-        srcmap_url = build_lib.get_signed_url(
-            build_lib.GCS_UPLOAD_URL_FORMAT.format(bucket, name,
-                                                   stamped_srcmap_file))
-        latest_version_url = build_lib.GCS_UPLOAD_URL_FORMAT.format(
-            bucket, name, latest_version_file)
-        latest_version_url = build_lib.get_signed_url(
-            latest_version_url, content_type=LATEST_VERSION_CONTENT_TYPE)
-
-        targets_list_filename = build_lib.get_targets_list_filename(sanitizer)
-        targets_list_url = build_lib.get_signed_url(
-            build_lib.get_targets_list_url(bucket, name, sanitizer))
 
         env.append('OUT=' + out)
         env.append('MSAN_LIBS_PATH=/workspace/msan')
@@ -236,19 +230,19 @@ def get_build_steps(project_name, project_yaml_file, dockerfile_lines,
                 ],
             })
 
-        if sanitizer == 'memory':
-          # Patch dynamic libraries to use instrumented ones.
-          build_steps.append({
-              'name':
-                  'gcr.io/{0}/msan-libs-builder'.format(base_images_project),
-              'args': [
-                  'bash',
-                  '-c',
-                  # TODO(ochang): Replace with just patch_build.py once
-                  # permission in image is fixed.
-                  'python /usr/local/bin/patch_build.py {0}'.format(out),
-              ],
-          })
+        # if sanitizer == 'memory':
+        #   # Patch dynamic libraries to use instrumented ones.
+        #   build_steps.append({
+        #       'name':
+        #           'gcr.io/{0}/msan-libs-builder'.format(base_images_project),
+        #       'args': [
+        #           'bash',
+        #           '-c',
+        #           # TODO(ochang): Replace with just patch_build.py once
+        #           # permission in image is fixed.
+        #           'python /usr/local/bin/patch_build.py {0}'.format(out),
+        #       ],
+        #   })
 
         if run_tests:
           failure_msg = ('*' * 80 + '\nBuild checks failed.\n'
@@ -300,6 +294,7 @@ def get_build_steps(project_name, project_yaml_file, dockerfile_lines,
           else:
             sys.stderr.write('Skipping dataflow post build steps.\n')
 
+        targets_list_filename = build_lib.get_targets_list_filename(sanitizer)
         build_steps.extend([
             # generate targets list
             {
@@ -323,47 +318,67 @@ def get_build_steps(project_name, project_yaml_file, dockerfile_lines,
                     'cd {out} && zip -r {zip_file} *'.format(out=out,
                                                              zip_file=zip_file)
                 ],
-            },
-            # upload srcmap
-            {
-                'name': 'gcr.io/{0}/uploader'.format(base_images_project),
-                'args': [
-                    '/workspace/srcmap.json',
-                    srcmap_url,
-                ],
-            },
-            # upload binaries
-            {
-                'name': 'gcr.io/{0}/uploader'.format(base_images_project),
-                'args': [
-                    os.path.join(out, zip_file),
-                    upload_url,
-                ],
-            },
-            # upload targets list
-            {
-                'name':
-                    'gcr.io/{0}/uploader'.format(base_images_project),
-                'args': [
-                    '/workspace/{0}'.format(targets_list_filename),
-                    targets_list_url,
-                ],
-            },
-            # upload the latest.version file
-            build_lib.http_upload_step(zip_file, latest_version_url,
-                                       LATEST_VERSION_CONTENT_TYPE),
-            # cleanup
-            {
-                'name': image,
-                'args': [
-                    'bash',
-                    '-c',
-                    'rm -r ' + out,
-                ],
-            },
-        ])
+            }])
+        if not testing:
+          upload_url = build_lib.get_signed_url(
+              build_lib.GCS_UPLOAD_URL_FORMAT.format(bucket, name, zip_file))
+          srcmap_url = build_lib.get_signed_url(
+              build_lib.GCS_UPLOAD_URL_FORMAT.format(bucket, name,
+                                                   stamped_srcmap_file))
+          latest_version_url = build_lib.GCS_UPLOAD_URL_FORMAT.format(
+              bucket, name, latest_version_file)
+          latest_version_url = build_lib.get_signed_url(
+              latest_version_url, content_type=LATEST_VERSION_CONTENT_TYPE)
+
+          targets_list_url = build_lib.get_signed_url(
+              build_lib.get_targets_list_url(bucket, name, sanitizer))
+          upload_steps = [
+              # upload srcmap
+              {
+                  'name': 'gcr.io/{0}/uploader'.format(base_images_project),
+                  'args': [
+                      '/workspace/srcmap.json',
+                      srcmap_url,
+                  ],
+              },
+              # upload binaries
+              {
+                  'name': 'gcr.io/{0}/uploader'.format(base_images_project),
+                  'args': [
+                      os.path.join(out, zip_file),
+                      upload_url,
+                  ],
+              },
+              # upload targets list
+              {
+                  'name':
+                      'gcr.io/{0}/uploader'.format(base_images_project),
+                  'args': [
+                      '/workspace/{0}'.format(targets_list_filename),
+                      targets_list_url,
+                  ],
+              },
+              # upload the latest.version file
+              build_lib.http_upload_step(zip_file, latest_version_url,
+                                         LATEST_VERSION_CONTENT_TYPE),
+              # cleanup
+              {
+                  'name': image,
+                  'args': [
+                      'bash',
+                      '-c',
+                      'rm -r ' + out,
+                  ],
+              },
+          ]
+          build_steps.extend(upload_steps)
 
   return build_steps
+
+
+def get_upload_steps():
+  # TODO
+  pass
 
 
 def dataflow_post_build_steps(project_name, env, base_images_project):
@@ -433,24 +448,33 @@ def run_build(build_steps, project_name, tag):
 
 def main():
   """Build and run projects."""
-  if len(sys.argv) != 2:
-    usage()
+  parser = argparse.ArgumentParser('build_project.py',
+                                   description='Builds a project on GCB')
+  parser.add_argument('project_dirs', help='Project directories.', nargs='+')
+  parser.add_argument('--testing', action='store_true', required=False,
+                      default=False, help='Don\'t upload builds.')
+  parser.add_argument('--test-images', action='store_true',
+                      required=False,
+                      default=False, help='Use testing base-images.')
+  parser.add_argument('--branch',
+                      required=False,
+                      default=None, help='Use specified OSS-Fuzz branch.')
+  args = parser.parse_args()
 
   image_project = 'oss-fuzz'
   base_images_project = 'oss-fuzz-base'
-  project_dir = sys.argv[1].rstrip(os.path.sep)
-  dockerfile_path = os.path.join(project_dir, 'Dockerfile')
-  project_yaml_path = os.path.join(project_dir, 'project.yaml')
-  project_name = os.path.basename(project_dir)
 
-  with open(dockerfile_path) as dockerfile:
-    dockerfile_lines = dockerfile.readlines()
+  # TODO(metzman): This script should accept project names not directories.
+  for project_dir in args.project_dirs:
+    # !!! Needed?
+    project_dir = project_dir.rstrip(os.path.sep)
+    steps = get_build_steps(project_dir,
+                            image_project, base_images_project,
+                            testing=args.testing, test_images=args.test_images,
+                            branch=args.branch)
 
-  with open(project_yaml_path) as project_yaml_file:
-    steps = get_build_steps(project_name, project_yaml_file, dockerfile_lines,
-                            image_project, base_images_project)
-
-  run_build(steps, project_name, FUZZING_BUILD_TAG)
+    project_name = os.path.basename(project_dir)
+    run_build(steps, project_name, FUZZING_BUILD_TAG)
 
 
 if __name__ == '__main__':
