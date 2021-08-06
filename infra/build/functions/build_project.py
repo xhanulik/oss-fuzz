@@ -62,8 +62,8 @@ LATEST_VERSION_CONTENT_TYPE = 'text/plain'
 
 QUEUE_TTL_SECONDS = 60 * 60 * 24  # 24 hours.
 
-PROJECTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                            'projects')
+PROJECTS_DIR = os.path.abspath(os.path.join(__file__, os.path.pardir, os.path.pardir, os.path.pardir, os.path.pardir,
+                            'projects'))
 
 
 def set_yaml_defaults(project_name, project_yaml, image_project):
