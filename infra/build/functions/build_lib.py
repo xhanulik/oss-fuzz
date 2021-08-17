@@ -82,11 +82,16 @@ def get_targets_list_url(bucket, project, sanitizer):
   url = GCS_UPLOAD_URL_FORMAT.format(bucket, project, filename)
   return url
 
+def get_upload_bucket(engine, testing):
+  bucket = ENGINE_INFO[engine].upload_bucket
+  if testing:
+    bucket += '-testing'
+  return bucket
 
-def _get_targets_list(project_name):
+def _get_targets_list(project_name, testing):
   """Returns target list."""
   # libFuzzer ASan is the default configuration, get list of targets from it.
-  url = get_targets_list_url(ENGINE_INFO['libfuzzer'].upload_bucket,
+  url = get_targets_list_url(get_upload_bucket('libfuzzer', testing),
                              project_name, 'address')
 
   url = urlparse.urljoin(GCS_URL_BASENAME, url)
@@ -136,10 +141,10 @@ def get_signed_url(path, method='PUT', content_type=''):
   return f'https://storage.googleapis.com{path}?{urlparse.urlencode(values)}'
 
 
-def download_corpora_steps(project_name):
+def download_corpora_steps(project_name, testing):
   """Returns GCB steps for downloading corpora backups for the given project.
   """
-  fuzz_targets = _get_targets_list(project_name)
+  fuzz_targets = _get_targets_list(project_name, testing)
   if not fuzz_targets:
     sys.stderr.write('No fuzz targets found for project "%s".\n' % project_name)
     return None

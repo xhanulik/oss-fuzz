@@ -284,7 +284,7 @@ def get_build_steps(project_name,
 
         if sanitizer == 'dataflow' and fuzzing_engine == 'dataflow':
           dataflow_steps = dataflow_post_build_steps(project_name, env,
-                                                     base_images_project)
+                                                     base_images_project, testing)
           if dataflow_steps:
             build_steps.extend(dataflow_steps)
           else:
@@ -304,20 +304,18 @@ def get_build_steps(project_name,
                 ],
             }
         ])
-        # !!!
-        if not testing:
-          upload_steps = get_upload_steps(project_name, sanitizer,
-                                          fuzzing_engine, architecture,
-                                          timestamp, base_images_project)
+        upload_steps = get_upload_steps(project_name, sanitizer,
+                                        fuzzing_engine, architecture,
+                                        timestamp, base_images_project, testing)
           build_steps.extend(upload_steps)
 
   return build_steps
 
 
 def get_upload_steps(name, sanitizer, fuzzing_engine, architecture, timestamp,
-                     base_images_project):
+                     base_images_project, testing):
 
-  bucket = build_lib.ENGINE_INFO[fuzzing_engine].upload_bucket
+  bucket = build_lib.get_upload_bucket(fuzzing_engine, testing)
   if architecture != 'x86_64':
     bucket += '-' + architecture
   stamped_name = '-'.join([name, sanitizer, timestamp])
@@ -389,9 +387,9 @@ def get_upload_steps(name, sanitizer, fuzzing_engine, architecture, timestamp,
   return upload_steps
 
 
-def dataflow_post_build_steps(project_name, env, base_images_project):
+def dataflow_post_build_steps(project_name, env, base_images_project, testing):
   """Appends dataflow post build steps."""
-  steps = build_lib.download_corpora_steps(project_name)
+  steps = build_lib.download_corpora_steps(project_name, testing)
   if not steps:
     return None
 

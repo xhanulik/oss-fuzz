@@ -113,7 +113,8 @@ def get_build_steps(project_name, project_yaml_file, dockerfile_lines,
       ],
   })
 
-  download_corpora_steps = build_lib.download_corpora_steps(project_name)
+  # !!!
+  download_corpora_steps = build_lib.download_corpora_steps(project_name, testing=False)
   if not download_corpora_steps:
     logging.info('Skipping code coverage build for %s.', project_name)
     return []
