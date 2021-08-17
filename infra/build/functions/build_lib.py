@@ -82,11 +82,13 @@ def get_targets_list_url(bucket, project, sanitizer):
   url = GCS_UPLOAD_URL_FORMAT.format(bucket, project, filename)
   return url
 
+
 def get_upload_bucket(engine, testing):
   bucket = ENGINE_INFO[engine].upload_bucket
   if testing:
     bucket += '-testing'
   return bucket
+
 
 def _get_targets_list(project_name, testing):
   """Returns target list."""

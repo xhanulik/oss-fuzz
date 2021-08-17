@@ -116,21 +116,21 @@ def workdir_from_dockerfile(dockerfile_lines):
   return None
 
 
-def load_project_yaml(project_yaml_path, image_project):
+def load_project_yaml(project_yaml_path):
   """Loads project yaml and sets default values."""
   with open(project_yaml_path, 'r') as project_yaml_file_handle:
     project_yaml = yaml.safe_load(project_yaml_file_handle)
-  set_yaml_defaults(project_yaml, image_project)
+  set_yaml_defaults(project_yaml)
   return project_yaml
 
 
-def get_project_data(project_name, image_project):
+def get_project_data(project_name):
   project_dir = os.path.join(PROJECTS_DIR, project_name)
   dockerfile_path = os.path.join(project_dir, 'Dockerfile')
   with open(dockerfile_path) as dockerfile:
     dockerfile_lines = dockerfile.readlines()
   project_yaml_path = os.path.join(project_dir, 'project.yaml')
-  project_yaml = load_project_yaml(project_yaml_path, image_project)
+  project_yaml = load_project_yaml(project_yaml_path)
   return project_yaml, dockerfile_lines
 
 
@@ -151,7 +151,7 @@ def get_build_steps(project_name,
                     test_images=False):
   """Returns build steps for project."""
 
-  project_yaml, dockerfile_lines = get_project_data(project_name, image_project)
+  project_yaml, dockerfile_lines = get_project_data(project_name)
 
   if project_yaml['disabled']:
     logging.info('Project "%s" is disabled.', project_name)
@@ -204,10 +204,10 @@ def get_build_steps(project_name,
           workdir = '/src'
 
         failure_msg = ('*' * 80 + '\nFailed to build.\nTo reproduce, run:\n'
-                       f'python infra/helper.py build_image {name}\n'
+                       f'python infra/helper.py build_image {project_name}\n'
                        'python infra/helper.py build_fuzzers --sanitizer '
                        f'{sanitizer} --engine {fuzzing_engine} --architecture '
-                       f'{architecture} {name}\n' + '*' * 80)
+                       f'{architecture} {project_name}\n' + '*' * 80)
 
         build_steps.append(
             # compile
@@ -247,13 +247,14 @@ def get_build_steps(project_name,
         if run_tests:
           failure_msg = ('*' * 80 + '\nBuild checks failed.\n'
                          'To reproduce, run:\n'
-                         f'python infra/helper.py build_image {name}\n'
+                         f'python infra/helper.py build_image {project_name}\n'
                          'python infra/helper.py build_fuzzers --sanitizer '
                          f'{sanitizer} --engine {fuzzing_engine} '
-                         f'--architecture {architecture} {name}\n'
+                         f'--architecture {architecture} {project_name}\n'
                          'python infra/helper.py check_build --sanitizer '
                          f'{sanitizer} --engine {fuzzing_engine} '
-                         f'--architecture {architecture} {name}\n' + '*' * 80)
+                         f'--architecture {architecture} {project_name}\n' +
+                         '*' * 80)
 
           build_steps.append(
               # test binaries
@@ -284,7 +285,8 @@ def get_build_steps(project_name,
 
         if sanitizer == 'dataflow' and fuzzing_engine == 'dataflow':
           dataflow_steps = dataflow_post_build_steps(project_name, env,
-                                                     base_images_project, testing)
+                                                     base_images_project,
+                                                     testing)
           if dataflow_steps:
             build_steps.extend(dataflow_steps)
           else:
@@ -304,10 +306,10 @@ def get_build_steps(project_name,
                 ],
             }
         ])
-        upload_steps = get_upload_steps(project_name, sanitizer,
-                                        fuzzing_engine, architecture,
-                                        timestamp, base_images_project, testing)
-          build_steps.extend(upload_steps)
+        upload_steps = get_upload_steps(project_name, sanitizer, fuzzing_engine,
+                                        architecture, timestamp,
+                                        base_images_project, testing)
+        build_steps.extend(upload_steps)
 
   return build_steps
 
