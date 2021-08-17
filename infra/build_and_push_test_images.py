@@ -21,7 +21,6 @@ import multiprocessing
 import os
 import subprocess
 
-
 TAG_PREFIX = 'gcr.io/oss-fuzz-base/'
 TESTING_TAG_SUFFIX = '-testing'
 INFRA_DIR = os.path.dirname(__file__)
@@ -53,13 +52,13 @@ def build_image(image, tags):
   subprocess.run(command, check=True)
   logging.info('Built: %s', image)
 
+
 def build_and_push_images():
   images = [
       ['base-image'],
       ['base-clang', 'base-runner'],
       ['base-builder', 'base-runner-debug'],
       # ['base-builder', 'base-runner-debug', 'base-sanitizer-build-libs'],
-      # ['msan-libs-builder'],
   ]
   max_parallelization = max([len(image_list) for image_list in images])
   proc_count = min(multiprocessing.cpu_count(), max_parallelization)
@@ -68,12 +67,12 @@ def build_and_push_images():
     pool.map(build_and_push_image, image_list)
 
 
-
 def main():
   logging.basicConfig(level=logging.DEBUG)
   logging.info('Doing simple gcloud command to ensure 2FA passes.')
   subprocess.run(['gcloud', 'projects', 'list', '--limit=1'], check=True)
   build_and_push_images()
+
 
 if __name__ == '__main__':
   main()

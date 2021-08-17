@@ -182,7 +182,6 @@ def get_build_steps(project_name,
         out = get_out_dir(sanitizer)
 
         env.append('OUT=' + out)
-        # env.append('MSAN_LIBS_PATH=/workspace/msan')
         env.append('ARCHITECTURE=' + architecture)
         env.append('FUZZING_LANGUAGE=' + language)
 
@@ -285,7 +284,8 @@ def get_build_steps(project_name,
         ])
         upload_steps = get_upload_steps(project_name, sanitizer, fuzzing_engine,
                                         architecture, timestamp,
-                                        base_images_project, image_project, testing)
+                                        base_images_project, image_project,
+                                        testing)
         build_steps.extend(upload_steps)
 
   return build_steps
@@ -317,12 +317,8 @@ def get_upload_steps(name, sanitizer, fuzzing_engine, architecture, timestamp,
   upload_steps = [
       # zip binaries
       {
-          'name':
-              image,
-          'args': [
-              'bash', '-c',
-              f'cd {out} && zip -r {zip_file} *'
-          ],
+          'name': image,
+          'args': ['bash', '-c', f'cd {out} && zip -r {zip_file} *'],
       },
       # upload srcmap
       {
@@ -342,8 +338,7 @@ def get_upload_steps(name, sanitizer, fuzzing_engine, architecture, timestamp,
       },
       # upload targets list
       {
-          'name':
-              f'gcr.io/{base_images_project}/uploader',
+          'name': f'gcr.io/{base_images_project}/uploader',
           'args': [
               f'/workspace/{targets_list_filename}',
               targets_list_url,
