@@ -308,14 +308,14 @@ def get_build_steps(project_name,
         ])
         upload_steps = get_upload_steps(project_name, sanitizer, fuzzing_engine,
                                         architecture, timestamp,
-                                        base_images_project, testing)
+                                        base_images_project, image_project, testing)
         build_steps.extend(upload_steps)
 
   return build_steps
 
 
 def get_upload_steps(name, sanitizer, fuzzing_engine, architecture, timestamp,
-                     base_images_project, testing):
+                     base_images_project, image_project, testing):
 
   bucket = build_lib.get_upload_bucket(fuzzing_engine, testing)
   if architecture != 'x86_64':
@@ -335,7 +335,7 @@ def get_upload_steps(name, sanitizer, fuzzing_engine, architecture, timestamp,
   targets_list_url = build_lib.get_signed_url(
       build_lib.get_targets_list_url(bucket, name, sanitizer))
   targets_list_filename = build_lib.get_targets_list_filename(sanitizer)
-  image = get_project_image(base_images_project, name)
+  image = get_project_image(image_project, name)
   out = get_out_dir(sanitizer)
   upload_steps = [
       # zip binaries
@@ -344,13 +344,12 @@ def get_upload_steps(name, sanitizer, fuzzing_engine, architecture, timestamp,
               image,
           'args': [
               'bash', '-c',
-              'cd {out} && zip -r {zip_file} *'.format(out=out,
-                                                       zip_file=zip_file)
+              f'cd {out} && zip -r {zip_file} *'
           ],
       },
       # upload srcmap
       {
-          'name': 'gcr.io/{0}/uploader'.format(base_images_project),
+          'name': f'gcr.io/{base_images_project}/uploader',
           'args': [
               '/workspace/srcmap.json',
               srcmap_url,
@@ -358,7 +357,7 @@ def get_upload_steps(name, sanitizer, fuzzing_engine, architecture, timestamp,
       },
       # upload binaries
       {
-          'name': 'gcr.io/{0}/uploader'.format(base_images_project),
+          'name': f'gcr.io/{base_images_project}/uploader',
           'args': [
               os.path.join(out, zip_file),
               upload_url,
@@ -367,9 +366,9 @@ def get_upload_steps(name, sanitizer, fuzzing_engine, architecture, timestamp,
       # upload targets list
       {
           'name':
-              'gcr.io/{0}/uploader'.format(base_images_project),
+              f'gcr.io/{base_images_project}/uploader',
           'args': [
-              '/workspace/{0}'.format(targets_list_filename),
+              f'/workspace/{targets_list_filename}',
               targets_list_url,
           ],
       },
