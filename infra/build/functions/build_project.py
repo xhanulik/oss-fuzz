@@ -167,15 +167,6 @@ def get_build_steps(project_name,
                                               language,
                                               branch=branch,
                                               test_images=test_images)
-  # # Copy over MSan instrumented libraries.
-  # build_steps.append({
-  #     'name': 'gcr.io/{0}/msan-libs-builder'.format(base_images_project),
-  #     'args': [
-  #         'bash',
-  #         '-c',
-  #         'cp -r /msan /workspace',
-  #     ],
-  # })
 
   # Sort engines to make AFL first to test if libFuzzer has an advantage in
   # finding bugs first since it is generally built first.
@@ -229,20 +220,6 @@ def get_build_steps(project_name,
                      '&& false)'),
                 ],
             })
-
-        # if sanitizer == 'memory':
-        #   # Patch dynamic libraries to use instrumented ones.
-        #   build_steps.append({
-        #       'name':
-        #           'gcr.io/{0}/msan-libs-builder'.format(base_images_project),
-        #       'args': [
-        #           'bash',
-        #           '-c',
-        #           # TODO(ochang): Replace with just patch_build.py once
-        #           # permission in image is fixed.
-        #           'python /usr/local/bin/patch_build.py {0}'.format(out),
-        #       ],
-        #   })
 
         if run_tests:
           failure_msg = ('*' * 80 + '\nBuild checks failed.\n'
