@@ -66,6 +66,9 @@ PROJECTS_DIR = os.path.abspath(
     os.path.join(__file__, os.path.pardir, os.path.pardir, os.path.pardir,
                  os.path.pardir, 'projects'))
 
+ImageInfo = collections.namedtuple('ImageInfo',
+                                   ['image_project', 'base_images_project'])
+
 
 def set_yaml_defaults(project_yaml):
   """Set project.yaml's default parameters."""
@@ -134,8 +137,8 @@ def get_project_data(project_name):
   return project_yaml, dockerfile_lines
 
 
-def get_project_image(image_project, project_name):
-  return 'gcr.io/{0}/{1}'.format(image_project, project_name)
+def get_project_image(image_info, project_name):
+  return 'gcr.io/{0}/{1}'.format(image_info.image_project, project_name)
 
 
 def get_out_dir(sanitizer):
@@ -144,8 +147,7 @@ def get_out_dir(sanitizer):
 
 # pylint: disable=too-many-locals, too-many-statements, too-many-branches
 def get_build_steps(project_name,
-                    image_project,
-                    base_images_project,
+                    image_info,
                     testing=False,
                     branch=None,
                     test_images=False):
@@ -157,7 +159,7 @@ def get_build_steps(project_name,
     logging.info('Project "%s" is disabled.', project_name)
     return []
 
-  image = get_project_image(image_project, project_name)
+  image = get_project_image(image_info, project_name)
   language = project_yaml['language']
   run_tests = project_yaml['run_tests']
   timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M')
@@ -177,7 +179,7 @@ def get_build_steps(project_name,
                                           architecture):
           continue
 
-        env = CONFIGURATIONS['engine-' + fuzzing_engine][:]
+        env = CONFIGURATIONS['engine-' + fuzzing_engine].copy()
         env.extend(CONFIGURATIONS['sanitizer-' + sanitizer])
         out = get_out_dir(sanitizer)
 
@@ -200,7 +202,7 @@ def get_build_steps(project_name,
                        f'{architecture} {project_name}\n' + '*' * 80)
 
         build_steps.append(
-            # compile
+            # Compile.
             {
                 'name':
                     image,
@@ -233,10 +235,10 @@ def get_build_steps(project_name,
                          '*' * 80)
 
           build_steps.append(
-              # test binaries
+              # Test fuzz targets.
               {
                   'name':
-                      f'gcr.io/{base_images_project}/base-runner',
+                      f'gcr.io/{image_info.base_images_project}/base-runner',
                   'env':
                       env,
                   'args': [
@@ -246,7 +248,7 @@ def get_build_steps(project_name,
               })
 
         if project_yaml['labels']:
-          # write target labels
+          # Write target labels.
           build_steps.append({
               'name':
                   image,
@@ -260,9 +262,8 @@ def get_build_steps(project_name,
           })
 
         if sanitizer == 'dataflow' and fuzzing_engine == 'dataflow':
-          dataflow_steps = dataflow_post_build_steps(project_name, env,
-                                                     base_images_project,
-                                                     testing)
+          dataflow_steps = dataflow_post_build_steps(
+              project_name, env, image_info.base_images_project, testing)
           if dataflow_steps:
             build_steps.extend(dataflow_steps)
           else:
@@ -270,10 +271,10 @@ def get_build_steps(project_name,
 
         targets_list_filename = build_lib.get_targets_list_filename(sanitizer)
         build_steps.extend([
-            # generate targets list
+            # Generate targets list.
             {
                 'name':
-                    f'gcr.io/{base_images_project}/base-runner',
+                    f'gcr.io/{image_info.base_images_project}/base-runner',
                 'env':
                     env,
                 'args': [
@@ -283,16 +284,15 @@ def get_build_steps(project_name,
             }
         ])
         upload_steps = get_upload_steps(project_name, sanitizer, fuzzing_engine,
-                                        architecture, timestamp,
-                                        base_images_project, image_project,
+                                        architecture, timestamp, image_info,
                                         testing)
         build_steps.extend(upload_steps)
 
   return build_steps
 
 
-def get_upload_steps(project_name, sanitizer, fuzzing_engine, architecture, timestamp,
-                     base_images_project, image_project, testing):
+def get_upload_steps(project_name, sanitizer, fuzzing_engine, architecture,
+                     timestamp, image_info, testing):
 
   bucket = build_lib.get_upload_bucket(fuzzing_engine, testing)
   if architecture != 'x86_64':
@@ -303,8 +303,10 @@ def get_upload_steps(project_name, sanitizer, fuzzing_engine, architecture, time
       build_lib.GCS_UPLOAD_URL_FORMAT.format(bucket, project_name, zip_file))
   stamped_srcmap_file = stamped_name + '.srcmap.json'
   srcmap_url = build_lib.get_signed_url(
-      build_lib.GCS_UPLOAD_URL_FORMAT.format(bucket, project_name, stamped_srcmap_file))
-  latest_version_file = '-'.join([project_name, sanitizer, LATEST_VERSION_FILENAME])
+      build_lib.GCS_UPLOAD_URL_FORMAT.format(bucket, project_name,
+                                             stamped_srcmap_file))
+  latest_version_file = '-'.join(
+      [project_name, sanitizer, LATEST_VERSION_FILENAME])
   latest_version_url = build_lib.GCS_UPLOAD_URL_FORMAT.format(
       bucket, project_name, latest_version_file)
   latest_version_url = build_lib.get_signed_url(
@@ -312,42 +314,42 @@ def get_upload_steps(project_name, sanitizer, fuzzing_engine, architecture, time
   targets_list_url = build_lib.get_signed_url(
       build_lib.get_targets_list_url(bucket, project_name, sanitizer))
   targets_list_filename = build_lib.get_targets_list_filename(sanitizer)
-  image = get_project_image(image_project, project_name)
+  image = get_project_image(image_info, project_name)
   out = get_out_dir(sanitizer)
   upload_steps = [
-      # zip binaries
+      # Zip binaries.
       {
           'name': image,
           'args': ['bash', '-c', f'cd {out} && zip -r {zip_file} *'],
       },
-      # upload srcmap
+      # Upload srcmap.
       {
-          'name': f'gcr.io/{base_images_project}/uploader',
+          'name': f'gcr.io/{image_info.base_images_project}/uploader',
           'args': [
               '/workspace/srcmap.json',
               srcmap_url,
           ],
       },
-      # upload binaries
+      # Upload binaries.
       {
-          'name': f'gcr.io/{base_images_project}/uploader',
+          'name': f'gcr.io/{image_info.base_images_project}/uploader',
           'args': [
               os.path.join(out, zip_file),
               upload_url,
           ],
       },
-      # upload targets list
+      # Upload targets list.
       {
-          'name': f'gcr.io/{base_images_project}/uploader',
+          'name': f'gcr.io/{image_info.base_images_project}/uploader',
           'args': [
               f'/workspace/{targets_list_filename}',
               targets_list_url,
           ],
       },
-      # upload the latest.version file
+      # Upload the latest.version file.
       build_lib.http_upload_step(zip_file, latest_version_url,
                                  LATEST_VERSION_CONTENT_TYPE),
-      # cleanup
+      # Cleanup.
       {
           'name': image,
           'args': [
@@ -448,15 +450,12 @@ def main():
 
   logging.basicConfig(level=logging.INFO)
 
-  image_project = 'oss-fuzz'
-  base_images_project = 'oss-fuzz-base'
+  image_info = ImageInfo('oss-fuzz', 'oss-fuzz-base')
 
-  # TODO(metzman): This script should accept project names not directories.
   for project in args.projects:
     logging.info('Getting steps for: "%s".', project)
     steps = get_build_steps(project,
-                            image_project,
-                            base_images_project,
+                            image_info,
                             testing=args.testing,
                             test_images=args.test_images,
                             branch=args.branch)
