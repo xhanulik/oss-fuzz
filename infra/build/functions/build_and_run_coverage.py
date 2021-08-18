@@ -44,7 +44,7 @@ LATEST_REPORT_INFO_CONTENT_TYPE = 'application/json'
 LANGUAGES_WITH_COVERAGE_SUPPORT = ['c', 'c++', 'go', 'jvm', 'rust']
 
 
-class URLInfo:
+class Bucket:
 
   def __init__(self, project, date, platform, testing):
     self.coverage_bucket_name = 'oss-fuzz-coverage'
@@ -66,63 +66,60 @@ class URLInfo:
 
 # pylint: disable=too-many-locals
 def get_build_steps(project_name,
-                    image_info,
+                    image_project,
+                    base_images_project,
                     testing=False,
                     branch=None,
                     test_images=False):
   """Returns build steps for project."""
-  project_yaml, dockerfile_lines = build_project.get_project_data(project_name)
-  if project_yaml['disabled']:
-    logging.info('Project "%s" is disabled.', project_name)
+  project = build_project.Project(project_name, image_project)
+  if project.disabled:
+    logging.info('Project "%s" is disabled.', project.name)
     return []
 
-  if project_yaml['language'] not in LANGUAGES_WITH_COVERAGE_SUPPORT:
+  if project.fuzzing_language not in LANGUAGES_WITH_COVERAGE_SUPPORT:
     logging.info(
         'Project "%s" is written in "%s", coverage is not supported yet.',
-        project_name, project_yaml['language'])
+        project.name, project.fuzzing_language)
     return []
 
-  image = build_project.get_project_image(image_info, project_name)
   report_date = datetime.datetime.now().strftime('%Y%m%d')
-  url_info = URLInfo(project_name, report_date, PLATFORM, testing)
+  bucket = Bucket(project.name, report_date, PLATFORM, testing)
 
-  build_steps = build_lib.project_image_steps(project_name,
-                                              image,
-                                              project_yaml['language'],
+  build_steps = build_lib.project_image_steps(project.name,
+                                              project.image,
+                                              project.fuzzing_language,
                                               branch=branch,
                                               test_images=test_images)
 
-  out = build_project.get_out_dir(SANITIZER)
-  env = build_lib.get_env(project_yaml['language'], FUZZING_ENGINE, SANITIZER,
-                          ARCHITECTURE, out)
-
-  build_lib.get_compile_step(project_name, env, image, FUZZING_ENGINE,
-                             SANITIZER, ARCHITECTURE, dockerfile_lines)
-  download_corpora_steps = build_lib.download_corpora_steps(project_name,
+  build = build_project.Build('libfuzzer', 'coverage', 'x86_64')
+  env = build_lib.get_env(project.fuzzing_language, build)
+  build_steps.append(build_lib.get_compile_step(project, build, env))
+  download_corpora_steps = build_lib.download_corpora_steps(project.name,
                                                             testing=testing)
   if not download_corpora_steps:
-    logging.info('Skipping code coverage build for %s.', project_name)
+    logging.info('Skipping code coverage build for %s.', project.name)
     return []
 
   build_steps.extend(download_corpora_steps)
 
   failure_msg = ('*' * 80 + '\nCode coverage report generation failed.\n'
                  'To reproduce, run:\n'
-                 f'python infra/helper.py build_image {project_name}\n'
+                 f'python infra/helper.py build_image {project.name}\n'
                  'python infra/helper.py build_fuzzers --sanitizer coverage '
-                 f'{project_name}\n'
-                 f'python infra/helper.py coverage {project_name}\n' + '*' * 80)
+                 f'{project.name}\n'
+                 f'python infra/helper.py coverage {project.name}\n' + '*' * 80)
 
   # Unpack the corpus and run coverage script.
   coverage_env = env + [
       'HTTP_PORT=',
-      f'COVERAGE_EXTRA_ARGS={project_yaml["coverage_extra_args"].strip()}',
+      f'COVERAGE_EXTRA_ARGS={project.coverage_extra_args.strip()}',
   ]
-  if 'dataflow' in project_yaml['fuzzing_engines']:
+  if 'dataflow' in project.fuzzing_engines:
     coverage_env.append('FULL_SUMMARY_PER_TARGET=1')
 
   build_steps.append({
-      'name': f'gcr.io/{image_info.base_images_project}/base-runner',
+      'name': f'gcr.io/{base_images_project}/base-runner',
       'env': coverage_env,
       'args': [
           'bash', '-c',
@@ -142,7 +139,7 @@ def get_build_steps(project_name,
   })
 
   # Upload the report.
-  upload_report_url = url_info.get_upload_url('reports')
+  upload_report_url = bucket.get_upload_url('reports')
 
   # Delete the existing report as gsutil cannot overwrite it in a useful way due
   # to the lack of `-T` option (it creates a subdir in the destination dir).
@@ -154,13 +151,13 @@ def get_build_steps(project_name,
           '-m',
           'cp',
           '-r',
-          os.path.join(out, 'report'),
+          os.path.join(build.out, 'report'),
           upload_report_url,
       ],
   })
 
   # Upload the fuzzer stats. Delete the old ones just in case.
-  upload_fuzzer_stats_url = url_info.get_upload_url('fuzzer_stats')
+  upload_fuzzer_stats_url = bucket.get_upload_url('fuzzer_stats')
 
   build_steps.append(build_lib.gsutil_rm_rf_step(upload_fuzzer_stats_url))
   build_steps.append({
@@ -170,13 +167,13 @@ def get_build_steps(project_name,
           '-m',
           'cp',
           '-r',
-          os.path.join(out, 'fuzzer_stats'),
+          os.path.join(build.out, 'fuzzer_stats'),
           upload_fuzzer_stats_url,
       ],
   })
 
   # Upload the fuzzer logs. Delete the old ones just in case
-  upload_fuzzer_logs_url = url_info.get_upload_url('logs')
+  upload_fuzzer_logs_url = bucket.get_upload_url('logs')
   build_steps.append(build_lib.gsutil_rm_rf_step(upload_fuzzer_logs_url))
   build_steps.append({
       'name':
@@ -185,13 +182,13 @@ def get_build_steps(project_name,
           '-m',
           'cp',
           '-r',
-          os.path.join(out, 'logs'),
+          os.path.join(build.out, 'logs'),
           upload_fuzzer_logs_url,
       ],
   })
 
   # Upload srcmap.
-  srcmap_upload_url = url_info.get_upload_url('srcmap')
+  srcmap_upload_url = bucket.get_upload_url('srcmap')
   srcmap_upload_url = srcmap_upload_url.rstrip('/') + '.json'
   build_steps.append({
       'name': 'gcr.io/cloud-builders/gsutil',
@@ -204,13 +201,13 @@ def get_build_steps(project_name,
 
   # Update the latest report information file for ClusterFuzz.
   latest_report_info_url = build_lib.get_signed_url(
-      url_info.latest_report_info_url,
+      bucket.latest_report_info_url,
       content_type=LATEST_REPORT_INFO_CONTENT_TYPE)
   latest_report_info_body = json.dumps({
       'fuzzer_stats_dir':
           upload_fuzzer_stats_url,
       'html_report_url':
-          url_info.html_report_url,
+          bucket.html_report_url,
       'report_date':
           report_date,
       'report_summary_path':
@@ -228,12 +225,14 @@ def main():
   """Build and run coverage for projects."""
   args = build_project.get_args('Generates coverage report for project.')
   logging.basicConfig(level=logging.INFO)
-  image_info = build_project.ImageInfo('oss-fuzz', 'oss-fuzz-base')
+  image_project = 'oss-fuzz'
+  base_images_project = 'oss-fuzz-base'
 
   for project in args.projects:
     logging.info('Getting steps for: "%s".', project)
     steps = get_build_steps(project,
-                            image_info,
+                            image_project,
+                            base_images_project,
                             testing=args.testing,
                             test_images=args.test_images,
                             branch=args.branch)
@@ -241,5 +240,5 @@ def main():
     build_project.run_build(steps, project, COVERAGE_BUILD_TAG)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
   main()

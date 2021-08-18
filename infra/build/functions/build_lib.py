@@ -236,6 +236,9 @@ def get_pull_test_image_steps():
     })
   return steps
 
+def get_srcmap_step_id():
+  return 'srcmap'
+
 
 def project_image_steps(name, image, language, branch=None, test_images=False):
   """Returns GCB steps to build OSS-Fuzz project image."""
@@ -254,6 +257,7 @@ def project_image_steps(name, image, language, branch=None, test_images=False):
   if test_images:
     steps.extend(get_pull_test_image_steps())
 
+  srcmap_step_id = get_srcmap_step_id()
   steps += [{
       'name': 'gcr.io/cloud-builders/docker',
       'args': [
@@ -274,6 +278,7 @@ def project_image_steps(name, image, language, branch=None, test_images=False):
           'OSSFUZZ_REVISION=$REVISION_ID',
           'FUZZING_LANGUAGE=%s' % language,
       ],
+      'id': srcmap_step_id
   }]
 
   return steps
