@@ -233,7 +233,7 @@ def get_pull_test_image_steps():
             'pull',
             test_image,
         ],
-        'waitFor': '-'  # Start this immediately, don't wait for previous step.
+        # 'waitFor': '-'  # Start this immediately, don't wait for previous step.
     })
 
 

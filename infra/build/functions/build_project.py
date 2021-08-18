@@ -66,7 +66,7 @@ class Build:
   @property
   def out(self):
     return posixpath.join(
-        '/workspace/out/'
+        '/workspace/out/',
         f'{self.fuzzing_engine}-{self.sanitizer}-{self.architecture}')
 
 
@@ -195,9 +195,9 @@ def get_compile_step(project, build, env):
            f'mkdir -p {build.out} && compile || '
            f'(echo "{failure_msg}" && false)'),
       ],
-      'waitFor':
-          build_lib.get_srcmap_step_id(),
-      'id': get_id('compile', build),
+      # 'waitFor':
+      #     build_lib.get_srcmap_step_id(),
+      # 'id': get_id('compile', build),
   }
 
 
@@ -264,8 +264,8 @@ def get_build_steps(project_name,
                       'bash', '-c',
                       f'test_all.py || (echo "{failure_msg}" && false)'
                   ],
-                  'waitFor': get_last_step_id(build_steps),
-                  'id': get_id('build-check', build)
+                  # 'waitFor': get_last_step_id(build_steps),
+                  # 'id': get_id('build-check', build)
               })
 
         if project.labels:
