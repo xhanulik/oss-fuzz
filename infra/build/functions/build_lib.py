@@ -224,6 +224,7 @@ def get_pull_test_image_steps():
             'pull',
             image,
         ],
+        'waitFor': '-' # Start this immediately, don't wait for previous step.
     })
     test_image = image + '-testing'
     steps.append({

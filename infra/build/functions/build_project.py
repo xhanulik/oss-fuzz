@@ -26,6 +26,7 @@ import datetime
 import json
 import logging
 import os
+import posixpath
 import re
 import sys
 
@@ -64,7 +65,9 @@ class Build:
 
   @property
   def out(self):
-    return '/workspace/out/' + self.sanitizer
+    return posixpath.join(
+        '/workspace/out/'
+        f'{self.fuzzing_engine}-{self.sanitizer}-{self.architecture}')
 
 
 class Project:
@@ -192,6 +195,9 @@ def get_compile_step(project, build, env):
            f'mkdir -p {build.out} && compile || '
            f'(echo "{failure_msg}" && false)'),
       ],
+      'waitFor': build_lib.get_srcmap_step_id(),
+      'id': (f'compile-{build.fuzzing_engine}-{build.sanitizer}'
+             f'-{build.architecture}')
   }
 
 
@@ -255,6 +261,7 @@ def get_build_steps(project_name,
                       'bash', '-c',
                       f'test_all.py || (echo "{failure_msg}" && false)'
                   ],
+                  'waitFor': get_last_step_id(build_steps),
               })
 
         if project.labels:
