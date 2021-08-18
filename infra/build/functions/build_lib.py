@@ -97,7 +97,9 @@ def get_upload_bucket(engine, testing=False, architecture='x86_64'):
 def _get_targets_list(project_name, testing):
   """Returns target list."""
   # libFuzzer ASan is the default configuration, get list of targets from it.
-  url = get_targets_list_url(get_upload_bucket('libfuzzer', testing),
+  # bucket = get_upload_bucket('libfuzzer', testing) # !!! breaks otherwise
+  bucket = get_upload_bucket('libfuzzer')
+  url = get_targets_list_url(bucket,
                              project_name, 'address')
 
   url = urlparse.urljoin(GCS_URL_BASENAME, url)
@@ -220,7 +222,7 @@ def get_pull_test_image_steps():
   """Returns steps to pull testing versions of base-images and tag them so that
   they are used in builds."""
   images = [
-      'gcr.io/oss-fuzz-base/base-builder', 'gcr.io/oss-fuzz-base/base-runner'
+      'gcr.io/oss-fuzz-base/base-builder'
   ]
   steps = []
   for image in images:

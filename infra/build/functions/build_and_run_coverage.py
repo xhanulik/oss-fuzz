@@ -119,7 +119,7 @@ def get_build_steps(project_name,
     coverage_env.append('FULL_SUMMARY_PER_TARGET=1')
 
   build_steps.append({
-      'name': f'gcr.io/{base_images_project}/base-runner',
+      'name': get_runner_image_name(base_images_project, testing),
       'env': coverage_env,
       'args': [
           'bash', '-c',
