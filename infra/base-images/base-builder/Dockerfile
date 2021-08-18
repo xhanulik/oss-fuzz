@@ -18,6 +18,7 @@ FROM gcr.io/oss-fuzz-base/base-clang
 
 RUN dpkg --add-architecture i386 && \
     apt-get update && \
+    apt-get upgrade && \
     apt-get install -y \
         binutils-dev \
         build-essential \

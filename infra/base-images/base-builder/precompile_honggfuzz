@@ -21,10 +21,10 @@ export BUILD_OSSFUZZ_STATIC=true
 PACKAGES=(
     libunwind8-dev
     libblocksruntime-dev
-    liblzma-dev
     libiberty-dev
-    zlib1g-dev
+    liblzma-dev
     pkg-config)
+# Don't install zlib1g-dev here. autoremoving it uninstalls python3.
 
 apt-get install -y ${PACKAGES[@]}
 
