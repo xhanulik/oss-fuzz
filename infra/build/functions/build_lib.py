@@ -224,7 +224,7 @@ def get_pull_test_image_steps():
             'pull',
             image,
         ],
-        'waitFor': '-' # Start this immediately, don't wait for previous step.
+        'waitFor': '-'  # Start this immediately, don't wait for previous step.
     })
     test_image = image + '-testing'
     steps.append({
@@ -236,6 +236,7 @@ def get_pull_test_image_steps():
         ],
     })
   return steps
+
 
 def get_srcmap_step_id():
   return 'srcmap'
@@ -269,8 +270,7 @@ def project_image_steps(name, image, language, branch=None, test_images=False):
       ],
       'dir': 'oss-fuzz/projects/' + name,
   }, {
-      'name':
-          image,
+      'name': image,
       'args': [
           'bash', '-c',
           'srcmap > /workspace/srcmap.json && cat /workspace/srcmap.json'

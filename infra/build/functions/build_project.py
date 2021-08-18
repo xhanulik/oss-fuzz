@@ -195,7 +195,8 @@ def get_compile_step(project, build, env):
            f'mkdir -p {build.out} && compile || '
            f'(echo "{failure_msg}" && false)'),
       ],
-      'waitFor': build_lib.get_srcmap_step_id(),
+      'waitFor':
+          build_lib.get_srcmap_step_id(),
       'id': (f'compile-{build.fuzzing_engine}-{build.sanitizer}'
              f'-{build.architecture}')
   }
@@ -253,10 +254,8 @@ def get_build_steps(project_name,
           build_steps.append(
               # Test fuzz targets.
               {
-                  'name':
-                      f'gcr.io/{base_images_project}/base-runner',
-                  'env':
-                      env,
+                  'name': f'gcr.io/{base_images_project}/base-runner',
+                  'env': env,
                   'args': [
                       'bash', '-c',
                       f'test_all.py || (echo "{failure_msg}" && false)'
