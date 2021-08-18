@@ -291,28 +291,28 @@ def get_build_steps(project_name,
   return build_steps
 
 
-def get_upload_steps(name, sanitizer, fuzzing_engine, architecture, timestamp,
+def get_upload_steps(project_name, sanitizer, fuzzing_engine, architecture, timestamp,
                      base_images_project, image_project, testing):
 
   bucket = build_lib.get_upload_bucket(fuzzing_engine, testing)
   if architecture != 'x86_64':
     bucket += '-' + architecture
-  stamped_name = '-'.join([name, sanitizer, timestamp])
+  stamped_name = '-'.join([project_name, sanitizer, timestamp])
   zip_file = stamped_name + '.zip'
   upload_url = build_lib.get_signed_url(
-      build_lib.GCS_UPLOAD_URL_FORMAT.format(bucket, name, zip_file))
+      build_lib.GCS_UPLOAD_URL_FORMAT.format(bucket, project_name, zip_file))
   stamped_srcmap_file = stamped_name + '.srcmap.json'
   srcmap_url = build_lib.get_signed_url(
-      build_lib.GCS_UPLOAD_URL_FORMAT.format(bucket, name, stamped_srcmap_file))
-  latest_version_file = '-'.join([name, sanitizer, LATEST_VERSION_FILENAME])
+      build_lib.GCS_UPLOAD_URL_FORMAT.format(bucket, project_name, stamped_srcmap_file))
+  latest_version_file = '-'.join([project_name, sanitizer, LATEST_VERSION_FILENAME])
   latest_version_url = build_lib.GCS_UPLOAD_URL_FORMAT.format(
-      bucket, name, latest_version_file)
+      bucket, project_name, latest_version_file)
   latest_version_url = build_lib.get_signed_url(
       latest_version_url, content_type=LATEST_VERSION_CONTENT_TYPE)
   targets_list_url = build_lib.get_signed_url(
-      build_lib.get_targets_list_url(bucket, name, sanitizer))
+      build_lib.get_targets_list_url(bucket, project_name, sanitizer))
   targets_list_filename = build_lib.get_targets_list_filename(sanitizer)
-  image = get_project_image(image_project, name)
+  image = get_project_image(image_project, project_name)
   out = get_out_dir(sanitizer)
   upload_steps = [
       # zip binaries
