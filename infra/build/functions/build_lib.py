@@ -83,10 +83,12 @@ def get_targets_list_url(bucket, project, sanitizer):
   return url
 
 
-def get_upload_bucket(engine, testing):
+def get_upload_bucket(engine, testing=False, architecture='x86_64'):
   """Returns the upload bucket for |engine|. Returns the testing bucket if
   |testing|."""
   bucket = ENGINE_INFO[engine].upload_bucket
+  if architecture != 'x86_64':
+    bucket += '-' + architecture
   if testing:
     bucket += '-testing'
   return bucket
@@ -218,7 +220,7 @@ def get_pull_test_image_steps():
   """Returns steps to pull testing versions of base-images and tag them so that
   they are used in builds."""
   images = [
-      'gcr.io/oss-fuzz-base/base-runner', 'gcr.io/oss-fuzz-base/base-builder'
+      'gcr.io/oss-fuzz-base/base-builder', 'gcr.io/oss-fuzz-base/base-runner'
   ]
   steps = []
   for image in images:
@@ -263,6 +265,7 @@ def project_image_steps(name, image, language, branch=None, test_images=False):
       'args': [
           'clone',
           'https://github.com/google/oss-fuzz.git',
+          '--depth', '1'
       ],
       'name': 'gcr.io/cloud-builders/git',
   }

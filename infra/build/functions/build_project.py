@@ -105,7 +105,7 @@ class Project:
         for key in sanitizer.keys():
           processed_sanitizers.append(key)
 
-      return processed_sanitizers
+    return processed_sanitizers
 
   @property
   def image(self):
@@ -197,9 +197,13 @@ def get_compile_step(project, build, env):
       ],
       'waitFor':
           build_lib.get_srcmap_step_id(),
-      'id': (f'compile-{build.fuzzing_engine}-{build.sanitizer}'
-             f'-{build.architecture}')
+      'id': get_id('compile', build),
   }
+
+
+def get_id(step_type, build):
+  return (f'{step_type}-{build.fuzzing_engine}-{build.sanitizer}'
+          f'-{build.architecture}')
 
 
 # pylint: disable=too-many-locals, too-many-statements, too-many-branches
@@ -254,13 +258,14 @@ def get_build_steps(project_name,
           build_steps.append(
               # Test fuzz targets.
               {
-                  'name': f'gcr.io/{base_images_project}/base-runner',
+                  'name': get_runner_image_name(base_images_project, testing), # !!!
                   'env': env,
                   'args': [
                       'bash', '-c',
                       f'test_all.py || (echo "{failure_msg}" && false)'
                   ],
                   'waitFor': get_last_step_id(build_steps),
+                  'id': get_id('build-check', build)
               })
 
         if project.labels:
@@ -292,7 +297,7 @@ def get_build_steps(project_name,
             # Generate targets list.
             {
                 'name':
-                    f'gcr.io/{base_images_project}/base-runner',
+                    get_runner_image_name(base_images_project, testing),
                 'env':
                     env,
                 'args': [
@@ -375,6 +380,12 @@ def get_upload_steps(project, build, timestamp, base_images_project, testing):
   ]
   return upload_steps
 
+def get_runner_image_name(base_images_project, testing):
+  image = f'gcr.io/{base_images_project}/base-runner'
+  if testing:
+    image += '-testing'
+  return image
+
 
 def dataflow_post_build_steps(project_name, env, base_images_project, testing):
   """Appends dataflow post build steps."""
@@ -384,7 +395,7 @@ def dataflow_post_build_steps(project_name, env, base_images_project, testing):
 
   steps.append({
       'name':
-          f'gcr.io/{base_images_project}/base-runner',
+          get_runner_image_name(base_images_project, testing),
       'env':
           env + [
               'COLLECT_DFT_TIMEOUT=2h',
