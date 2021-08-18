@@ -46,7 +46,7 @@ LANGUAGES_WITH_COVERAGE_SUPPORT = ['c', 'c++', 'go', 'jvm', 'rust']
 
 class Bucket:
 
-  def __init__(self, project, date, platform, testing):
+  def __init__(self, bucket_name, project, date, platform, testing):
     self.coverage_bucket_name = 'oss-fuzz-coverage'
     if testing:
       self.coverage_bucket_name += '-testing'

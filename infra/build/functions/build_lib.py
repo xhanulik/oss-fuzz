@@ -84,6 +84,8 @@ def get_targets_list_url(bucket, project, sanitizer):
 
 
 def get_upload_bucket(engine, testing):
+  """Returns the upload bucket for |engine|. Returns the testing bucket if
+  |testing|."""
   bucket = ENGINE_INFO[engine].upload_bucket
   if testing:
     bucket += '-testing'
@@ -213,26 +215,39 @@ def gsutil_rm_rf_step(url):
 
 
 def get_pull_test_image_steps():
+  """Returns steps to pull testing versions of base-images and tag them so that
+  they are used in builds."""
   images = [
       'gcr.io/oss-fuzz-base/base-runner', 'gcr.io/oss-fuzz-base/base-builder'
   ]
   steps = []
   for image in images:
-    steps.append({
-        'name': 'gcr.io/cloud-builders/docker',
-        'args': [
-            'pull',
-            image,
-        ],
-        'waitFor': '-'  # Start this immediately, don't wait for previous step.
-    })
     test_image = image + '-testing'
     steps.append({
         'name': 'gcr.io/cloud-builders/docker',
         'args': [
-            'tag',
-            image,
+            'pull',
             test_image,
+        ],
+        'waitFor': '-'  # Start this immediately, don't wait for previous step.
+    })
+
+
+    # This step is hacky but gives us great flexibility. OSS-Fuzz has hardcoded
+    # references to gcr.io/oss-fuzz-base/base-builder (in dockerfiles, for
+    # example) and gcr.io/oss-fuzz-base-runner (in this build code). But the
+    # testing versions of those images are called
+    # gcr.io/oss-fuzz-base/base-builder-testing and
+    # gcr.io/oss-fuzz-base/base-runner-testing. How can we get the build to use
+    # the testing images instead of the real ones? By doing this step: tagging
+    # the test image with the non-test version, so that the test version is used
+    # instead of pulling the real one.
+    steps.append({
+        'name': 'gcr.io/cloud-builders/docker',
+        'args': [
+            'tag',
+            test_image,
+            image
         ],
     })
   return steps

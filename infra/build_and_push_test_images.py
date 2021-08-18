@@ -28,6 +28,7 @@ IMAGES_DIR = os.path.join(INFRA_DIR, 'base-images')
 
 
 def push_image(tag):
+  """Pushes image with |tag| to docker registry."""
   logging.info('Pushing: %s', tag)
   command = ['docker', 'push', tag]
   subprocess.run(command, check=True)
@@ -35,6 +36,7 @@ def push_image(tag):
 
 
 def build_and_push_image(image):
+  """Builds and pushes |image| to docker registry with "-testing" suffix."""
   main_tag = TAG_PREFIX + image
   testing_tag = main_tag + TESTING_TAG_SUFFIX
   tags = [main_tag, testing_tag]
@@ -43,6 +45,7 @@ def build_and_push_image(image):
 
 
 def build_image(image, tags):
+  """Builds |image| and tags it with |tags|."""
   logging.info('Building: %s', image)
   command = ['docker', 'build']
   for tag in tags:
@@ -54,6 +57,7 @@ def build_image(image, tags):
 
 
 def build_and_push_images():
+  """Builds and pushes base-images."""
   images = [
       ['base-image'],
       ['base-clang', 'base-runner'],
