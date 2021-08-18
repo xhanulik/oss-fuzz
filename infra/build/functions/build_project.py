@@ -22,6 +22,7 @@ Usage: build_project.py <project_dir>
 from __future__ import print_function
 
 import argparse
+import collections
 import datetime
 import json
 import logging
@@ -40,18 +41,6 @@ import build_lib
 FUZZING_BUILD_TAG = 'fuzzing'
 
 GCB_LOGS_BUCKET = 'oss-fuzz-gcb-logs'
-
-CONFIGURATIONS = {
-    'sanitizer-address': ['SANITIZER=address'],
-    'sanitizer-dataflow': ['SANITIZER=dataflow'],
-    'sanitizer-memory': ['SANITIZER=memory'],
-    'sanitizer-undefined': ['SANITIZER=undefined'],
-    'engine-libfuzzer': ['FUZZING_ENGINE=libfuzzer'],
-    'engine-afl': ['FUZZING_ENGINE=afl'],
-    'engine-honggfuzz': ['FUZZING_ENGINE=honggfuzz'],
-    'engine-dataflow': ['FUZZING_ENGINE=dataflow'],
-    'engine-none': ['FUZZING_ENGINE=none'],
-}
 
 DEFAULT_ARCHITECTURES = ['x86_64']
 DEFAULT_ENGINES = ['libfuzzer', 'afl', 'honggfuzz']
@@ -145,6 +134,48 @@ def get_out_dir(sanitizer):
   return '/workspace/out/' + sanitizer
 
 
+def get_env(fuzzing_language, fuzzing_engine, sanitizer, architecture, out_dir):
+  env_dict = {
+      'FUZZING_LANGUAGE': fuzzing_language,
+      'FUZZING_ENGINE': fuzzing_engine,
+      'SANITIZER': sanitizer,
+      'ARCHITECTURE': architecture,
+      # Set HOME so that it doesn't point to a persisted volume (see
+      # https://github.com/google/oss-fuzz/issues/6035).
+      'HOME': '/root',
+      'OUT': out_dir,
+  }
+  return list(sorted([f'{key}={value}' for key, value in env_dict.items()]))
+
+
+def get_compile_step(project_name, env, image, fuzzing_engine, sanitizer,
+                     architecture, dockerfile_lines, out):
+  workdir = workdir_from_dockerfile(dockerfile_lines)
+  if not workdir:
+    workdir = '/src'
+  failure_msg = ('*' * 80 + '\nFailed to build.\nTo reproduce, run:\n'
+                 f'python infra/helper.py build_image {project_name}\n'
+                 'python infra/helper.py build_fuzzers --sanitizer '
+                 f'{sanitizer} --engine {fuzzing_engine} --architecture '
+                 f'{architecture} {project_name}\n' + '*' * 80)
+  return {
+      'name':
+          image,
+      'env':
+          env,
+      'args': [
+          'bash',
+          '-c',
+          # Remove /out to make sure there are non instrumented binaries.
+          # `cd /src && cd {workdir}` (where {workdir} is parsed from the
+          # Dockerfile). Container Builder overrides our workdir so we need
+          # to add this step to set it back.
+          (f'rm -r /out && cd /src && cd {workdir} && mkdir -p {out} && '
+           f'compile || (echo "{failure_msg}" && false)'),
+      ],
+  }
+
+
 # pylint: disable=too-many-locals, too-many-statements, too-many-branches
 def get_build_steps(project_name,
                     image_info,
@@ -160,13 +191,11 @@ def get_build_steps(project_name,
     return []
 
   image = get_project_image(image_info, project_name)
-  language = project_yaml['language']
-  run_tests = project_yaml['run_tests']
   timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M')
 
   build_steps = build_lib.project_image_steps(project_name,
                                               image,
-                                              language,
+                                              project_yaml['language'],
                                               branch=branch,
                                               test_images=test_images)
 
@@ -179,50 +208,16 @@ def get_build_steps(project_name,
                                           architecture):
           continue
 
-        env = CONFIGURATIONS['engine-' + fuzzing_engine].copy()
-        env.extend(CONFIGURATIONS['sanitizer-' + sanitizer])
         out = get_out_dir(sanitizer)
+        env = get_env(project_yaml['language'], fuzzing_engine, sanitizer,
+                      architecture, out)
 
-        env.append('OUT=' + out)
-        env.append('ARCHITECTURE=' + architecture)
-        env.append('FUZZING_LANGUAGE=' + language)
+        compile_step = get_compile_step(project_name, env, image,
+                                        fuzzing_engine, sanitizer, architecture,
+                                        dockerfile_lines, out)
+        build_steps.append(compile_step)
 
-        # Set HOME so that it doesn't point to a persisted volume (see
-        # https://github.com/google/oss-fuzz/issues/6035).
-        env.append('HOME=/root')
-
-        workdir = workdir_from_dockerfile(dockerfile_lines)
-        if not workdir:
-          workdir = '/src'
-
-        failure_msg = ('*' * 80 + '\nFailed to build.\nTo reproduce, run:\n'
-                       f'python infra/helper.py build_image {project_name}\n'
-                       'python infra/helper.py build_fuzzers --sanitizer '
-                       f'{sanitizer} --engine {fuzzing_engine} --architecture '
-                       f'{architecture} {project_name}\n' + '*' * 80)
-
-        build_steps.append(
-            # Compile.
-            {
-                'name':
-                    image,
-                'env':
-                    env,
-                'args': [
-                    'bash',
-                    '-c',
-                    # Remove /out to break loudly when a build script
-                    # incorrectly uses /out instead of $OUT.
-                    # `cd /src && cd {workdir}` (where {workdir} is parsed from
-                    # the Dockerfile). Container Builder overrides our workdir
-                    # so we need to add this step to set it back.
-                    (f'rm -r /out && cd /src && cd {workdir} '
-                     f'&& mkdir -p {out} && compile || (echo "{failure_msg}" '
-                     '&& false)'),
-                ],
-            })
-
-        if run_tests:
+        if project_yaml['run_tests']:
           failure_msg = ('*' * 80 + '\nBuild checks failed.\n'
                          'To reproduce, run:\n'
                          f'python infra/helper.py build_image {project_name}\n'
@@ -427,16 +422,14 @@ def run_build(build_steps, project_name, tag):
   print(build_id)
 
 
-def main():
-  """Build and run projects."""
-  parser = argparse.ArgumentParser('build_project.py',
-                                   description='Builds a project on GCB')
+def get_args(description):
+  parser = argparse.ArgumentParser(sys.argv[0], description=description)
   parser.add_argument('projects', help='Projects.', nargs='+')
   parser.add_argument('--testing',
                       action='store_true',
                       required=False,
                       default=False,
-                      help='Don\'t upload builds.')
+                      help='Upload to testing buckets.')
   parser.add_argument('--test-images',
                       action='store_true',
                       required=False,
@@ -446,8 +439,12 @@ def main():
                       required=False,
                       default=None,
                       help='Use specified OSS-Fuzz branch.')
-  args = parser.parse_args()
+  return parser.parse_args()
 
+
+def main():
+  """Build and run projects."""
+  args = get_args('Builds a project on GCB.')
   logging.basicConfig(level=logging.INFO)
 
   image_info = ImageInfo('oss-fuzz', 'oss-fuzz-base')
