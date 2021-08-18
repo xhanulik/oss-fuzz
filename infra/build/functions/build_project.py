@@ -446,11 +446,14 @@ def main():
                       help='Use specified OSS-Fuzz branch.')
   args = parser.parse_args()
 
+  logging.basicConfig(level=logging.INFO)
+
   image_project = 'oss-fuzz'
   base_images_project = 'oss-fuzz-base'
 
   # TODO(metzman): This script should accept project names not directories.
   for project in args.projects:
+    logging.info('Getting steps for: "%s".', project)
     steps = get_build_steps(project,
                             image_project,
                             base_images_project,
