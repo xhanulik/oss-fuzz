@@ -46,7 +46,7 @@ LANGUAGES_WITH_COVERAGE_SUPPORT = ['c', 'c++', 'go', 'jvm', 'rust']
 
 class Bucket:
 
-  def __init__(self, bucket_name, project, date, platform, testing):
+  def __init__(self, project, date, platform, testing):
     self.coverage_bucket_name = 'oss-fuzz-coverage'
     if testing:
       self.coverage_bucket_name += '-testing'
@@ -93,8 +93,8 @@ def get_build_steps(project_name,
                                               test_images=test_images)
 
   build = build_project.Build('libfuzzer', 'coverage', 'x86_64')
-  env = build_lib.get_env(project.fuzzing_language, build)
-  build_steps.append(build_lib.get_compile_step(project, build, env))
+  env = build_project.get_env(project.fuzzing_language, build)
+  build_steps.append(build_project.get_compile_step(project, build, env))
   download_corpora_steps = build_lib.download_corpora_steps(project.name,
                                                             testing=testing)
   if not download_corpora_steps:
