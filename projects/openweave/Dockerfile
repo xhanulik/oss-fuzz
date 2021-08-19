@@ -15,7 +15,7 @@
 ################################################################################
 
 FROM gcr.io/oss-fuzz-base/base-builder
-RUN apt-get update && apt-get install -y python-pip python-setuptools bridge-utils \
+RUN apt-get update && apt-get install -y python3-pip python-setuptools bridge-utils \
   libglib2.0-dev libdbus-1-dev libudev-dev \
   libical-dev libreadline-dev udev \
   libtool autoconf automake
