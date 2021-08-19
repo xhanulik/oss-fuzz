@@ -32,8 +32,7 @@ import test_utils
 
 # pylint: disable=no-member
 
-OSS_FUZZ_DIR = os.path.dirname(os.path.dirname(os.path.dirname(FUNCTIONS_DIR)))
-PROJECTS_DIR = os.path.join(OSS_FUZZ_DIR, 'projects')
+PROJECTS_DIR = os.path.join(test_utils.OSS_FUZZ_DIR, 'projects')
 
 
 class TestRequestCoverageBuilds(fake_filesystem_unittest.TestCase):

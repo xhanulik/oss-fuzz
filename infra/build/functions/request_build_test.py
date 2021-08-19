@@ -26,8 +26,7 @@ from google.cloud import ndb
 sys.path.append(os.path.dirname(__file__))
 # pylint: disable=wrong-import-position
 
-from datastore_entities import BuildsHistory
-from datastore_entities import Project
+import datastore_entities
 import request_build
 import test_utils
 
@@ -68,7 +67,7 @@ class TestRequestBuilds(unittest.TestCase):
       expected_build_steps = json.load(expected_build_steps_file)
 
     with ndb.Client().context():
-      Project(name='test-project',
+      datastore_entities.Project(name='test-project',
               project_yaml_contents=project_yaml_contents,
               dockerfile_contents='test line').put()
       build_steps = request_build.get_build_steps('test-project', image_project,
@@ -84,14 +83,14 @@ class TestRequestBuilds(unittest.TestCase):
   def test_build_history(self):
     """Testing build history."""
     with ndb.Client().context():
-      BuildsHistory(id='test-project-fuzzing',
+      datastore_entities.BuildsHistory(id='test-project-fuzzing',
                     build_tag='fuzzing',
                     project='test-project',
                     build_ids=[str(i) for i in range(1, 65)]).put()
       request_build.update_build_history('test-project', '65', 'fuzzing')
       expected_build_ids = [str(i) for i in range(2, 66)]
 
-      self.assertEqual(BuildsHistory.query().get().build_ids,
+      self.assertEqual(datastore_entities.BuildsHistory.query().get().build_ids,
                        expected_build_ids)
 
   def test_build_history_no_existing_project(self):
@@ -100,7 +99,7 @@ class TestRequestBuilds(unittest.TestCase):
       request_build.update_build_history('test-project', '1', 'fuzzing')
       expected_build_ids = ['1']
 
-      self.assertEqual(BuildsHistory.query().get().build_ids,
+      self.assertEqual(datastore_entities.BuildsHistory.query().get().build_ids,
                        expected_build_ids)
 
   def test_get_project_data(self):
