@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 ################################################################################
-"""Unit tests for Cloud Function that builds coverage reports."""
+"""Unit tests for build_and_run_coverage."""
 import json
 import datetime
 import os
@@ -21,31 +21,27 @@ import sys
 import unittest
 from unittest import mock
 
-from google.cloud import ndb
+from pyfakefs import fake_filesystem_unittest
 
-sys.path.append(os.path.dirname(__file__))
+FUNCTIONS_DIR = os.path.dirname(__file__)
+sys.path.append(FUNCTIONS_DIR)
 # pylint: disable=wrong-import-position
 
-from datastore_entities import Project
-from build_and_run_coverage import get_build_steps
+import build_and_run_coverage
 import test_utils
 
 # pylint: disable=no-member
 
+OSS_FUZZ_DIR = os.path.dirname(os.path.dirname(os.path.dirname(FUNCTIONS_DIR)))
+PROJECTS_DIR = os.path.join(OSS_FUZZ_DIR, 'projects')
 
-class TestRequestCoverageBuilds(unittest.TestCase):
+
+class TestRequestCoverageBuilds(fake_filesystem_unittest.TestCase):
   """Unit tests for sync."""
 
-  @classmethod
-  def setUpClass(cls):
-    cls.ds_emulator = test_utils.start_datastore_emulator()
-    test_utils.wait_for_emulator_ready(cls.ds_emulator, 'datastore',
-                                       test_utils.DATASTORE_READY_INDICATOR)
-    test_utils.set_gcp_environment()
-
   def setUp(self):
-    test_utils.reset_ds_emulator()
     self.maxDiff = None  # pylint: disable=invalid-name
+    self.setUpPyfakefs()
 
   @mock.patch('build_lib.get_signed_url', return_value='test_url')
   @mock.patch('build_lib.download_corpora_steps',
@@ -63,29 +59,26 @@ class TestRequestCoverageBuilds(unittest.TestCase):
                              '  - address\n'
                              'architectures:\n'
                              '  - x86_64\n')
+    project = 'test-project'
+    project_dir = os.path.join(PROJECTS_DIR, project)
+    self.fs.create_file(os.path.join(project_dir, 'project.yaml'),
+                        contents=project_yaml_contents)
     dockerfile_contents = 'test line'
+    self.fs.create_file(os.path.join(project_dir, 'Dockerfile'),
+                        contents=dockerfile_contents)
+
     image_project = 'oss-fuzz'
     base_images_project = 'oss-fuzz-base'
 
     expected_build_steps_file_path = test_utils.get_test_data_file_path(
         'expected_coverage_build_steps.json')
+    self.fs.add_real_file(expected_build_steps_file_path)
     with open(expected_build_steps_file_path) as expected_build_steps_file:
       expected_coverage_build_steps = json.load(expected_build_steps_file)
 
-    with ndb.Client().context():
-      Project(name='test-project',
-              project_yaml_contents=project_yaml_contents,
-              dockerfile_contents=dockerfile_contents).put()
-
-    dockerfile_lines = dockerfile_contents.split('\n')
-    build_steps = get_build_steps('test-project', project_yaml_contents,
-                                  dockerfile_lines, image_project,
-                                  base_images_project)
+    build_steps = build_and_run_coverage.get_build_steps(
+        'test-project', image_project, base_images_project)
     self.assertEqual(build_steps, expected_coverage_build_steps)
-
-  @classmethod
-  def tearDownClass(cls):
-    test_utils.cleanup_emulator(cls.ds_emulator)
 
 
 if __name__ == '__main__':
