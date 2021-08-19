@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 ################################################################################
-"""Unit tests for build_and_run_coverage."""
+"""Unit tests for build_project."""
 import json
 import datetime
 import os
@@ -27,10 +27,12 @@ FUNCTIONS_DIR = os.path.dirname(__file__)
 sys.path.append(FUNCTIONS_DIR)
 # pylint: disable=wrong-import-position
 
-import build_and_run_coverage
+import build_project
 import test_utils
 
 # pylint: disable=no-member
+
+PROJECTS_DIR = os.path.join(test_utils.OSS_FUZZ_DIR, 'projects')
 
 
 class TestRequestCoverageBuilds(fake_filesystem_unittest.TestCase):
@@ -41,21 +43,19 @@ class TestRequestCoverageBuilds(fake_filesystem_unittest.TestCase):
     self.setUpPyfakefs()
 
   @mock.patch('build_lib.get_signed_url', return_value='test_url')
-  @mock.patch('build_lib.download_corpora_steps',
-              return_value=[{
-                  'url': 'test_download'
-              }])
   @mock.patch('datetime.datetime')
-  def test_get_coverage_build_steps(self, mock_url, mock_corpora_steps,
-                                    mock_time):
+  def test_get_build_steps(self, mock_url, mock_time):
     """Test for get_build_steps."""
-    del mock_url, mock_corpora_steps, mock_time
+    del mock_url, mock_time
     datetime.datetime = test_utils.SpoofedDatetime
     project_yaml_contents = ('language: c++\n'
                              'sanitizers:\n'
                              '  - address\n'
+                             '  - memory\n'
+                             '  - undefined\n'
                              'architectures:\n'
-                             '  - x86_64\n')
+                             '  - x86_64\n'
+                             '  - i386\n')
     project = 'test-project'
     project_dir = os.path.join(PROJECTS_DIR, project)
     self.fs.create_file(os.path.join(project_dir, 'project.yaml'),
@@ -68,15 +68,15 @@ class TestRequestCoverageBuilds(fake_filesystem_unittest.TestCase):
     base_images_project = 'oss-fuzz-base'
 
     expected_build_steps_file_path = test_utils.get_test_data_file_path(
-        'expected_coverage_build_steps.json')
+        'expected_build_steps.json')
+
     self.fs.add_real_file(expected_build_steps_file_path)
     with open(expected_build_steps_file_path) as expected_build_steps_file:
-      expected_coverage_build_steps = json.load(expected_build_steps_file)
+      expected_build_steps = json.load(expected_build_steps_file)
 
-    build_steps = build_and_run_coverage.get_build_steps(
-        project, image_project, base_images_project)
-    self.assertEqual(build_steps, expected_coverage_build_steps)
-
+    build_steps = build_project.get_build_steps(project, image_project,
+                                                base_images_project)
+    self.assertEqual(build_steps, expected_build_steps)
 
 if __name__ == '__main__':
   unittest.main(exit=False)
