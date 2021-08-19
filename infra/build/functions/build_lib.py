@@ -99,8 +99,7 @@ def _get_targets_list(project_name, testing):
   # libFuzzer ASan is the default configuration, get list of targets from it.
   # bucket = get_upload_bucket('libfuzzer', testing) # !!! breaks otherwise
   bucket = get_upload_bucket('libfuzzer')
-  url = get_targets_list_url(bucket,
-                             project_name, 'address')
+  url = get_targets_list_url(bucket, project_name, 'address')
 
   url = urlparse.urljoin(GCS_URL_BASENAME, url)
   response = requests.get(url)
@@ -221,9 +220,7 @@ def gsutil_rm_rf_step(url):
 def get_pull_test_image_steps():
   """Returns steps to pull testing versions of base-images and tag them so that
   they are used in builds."""
-  images = [
-      'gcr.io/oss-fuzz-base/base-builder'
-  ]
+  images = ['gcr.io/oss-fuzz-base/base-builder']
   steps = []
   for image in images:
     test_image = image + '-testing'
@@ -236,7 +233,6 @@ def get_pull_test_image_steps():
         # 'waitFor': '-'  # Start this immediately, don't wait for previous step.
     })
 
-
     # This step is hacky but gives us great flexibility. OSS-Fuzz has hardcoded
     # references to gcr.io/oss-fuzz-base/base-builder (in dockerfiles, for
     # example) and gcr.io/oss-fuzz-base-runner (in this build code). But the
@@ -248,16 +244,13 @@ def get_pull_test_image_steps():
     # instead of pulling the real one.
     steps.append({
         'name': 'gcr.io/cloud-builders/docker',
-        'args': [
-            'tag',
-            test_image,
-            image
-        ],
+        'args': ['tag', test_image, image],
     })
   return steps
 
 
 def get_srcmap_step_id():
+  """Returns the id for the srcmap step."""
   return 'srcmap'
 
 
@@ -265,9 +258,7 @@ def project_image_steps(name, image, language, branch=None, test_images=False):
   """Returns GCB steps to build OSS-Fuzz project image."""
   clone_step = {
       'args': [
-          'clone',
-          'https://github.com/google/oss-fuzz.git',
-          '--depth', '1'
+          'clone', 'https://github.com/google/oss-fuzz.git', '--depth', '1'
       ],
       'name': 'gcr.io/cloud-builders/git',
   }

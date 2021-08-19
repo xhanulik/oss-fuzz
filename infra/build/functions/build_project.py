@@ -56,21 +56,26 @@ PROJECTS_DIR = os.path.abspath(
                  os.path.pardir, 'projects'))
 
 
-class Build:
+class Build:  # pylint: disable=too-few-public-methods
+  """Class representing the configuration for a build."""
 
   def __init__(self, fuzzing_engine, sanitizer, architecture):
     self.fuzzing_engine = fuzzing_engine
     self.sanitizer = sanitizer
     self.architecture = architecture
+    self.targets_list_filename = build_lib.get_targets_list_filename(
+        self.sanitizer)
 
   @property
   def out(self):
+    """Returns the out directory for the build."""
     return posixpath.join(
         '/workspace/out/',
         f'{self.fuzzing_engine}-{self.sanitizer}-{self.architecture}')
 
 
-class Project:
+class Project:  # pylint: disable=too-many-instance-attributes
+  """Class representing an OSS-Fuzz project."""
 
   def __init__(self, name, image_project):
     self.name = name
@@ -113,10 +118,12 @@ class Project:
 
   @property
   def image(self):
+    """Returns the docker image for the project."""
     return f'gcr.io/{self.image_project}/{self.name}'
 
 
 def get_last_step_id(steps):
+  """Returns the id of the last step in |steps|."""
   return steps[-1]['id']
 
 
@@ -162,6 +169,10 @@ def load_project_yaml(project_yaml_path):
 
 
 def get_env(fuzzing_language, build):
+  """Returns an environment for building. The environment is returned as a list
+  and is suitable for use as the "env" parameter in a GCB build step. The
+  environment variables are based on the values of |fuzzing_language| and
+  |build."""
   env_dict = {
       'FUZZING_LANGUAGE': fuzzing_language,
       'FUZZING_ENGINE': build.fuzzing_engine,
@@ -176,7 +187,8 @@ def get_env(fuzzing_language, build):
 
 
 def get_compile_step(project, build, env):
-
+  """Returns the GCB step for compiling |projects| fuzzers using |env|. The type
+  of build is specified by |build|."""
   failure_msg = (
       '*' * 80 + '\nFailed to build.\nTo reproduce, run:\n'
       f'python infra/helper.py build_image {project.name}\n'
@@ -206,17 +218,19 @@ def get_compile_step(project, build, env):
 
 
 def get_id(step_type, build):
+  """Returns a unique step id based on |step_type| and |build|. Useful for
+  parallelizing builds."""
   return (f'{step_type}-{build.fuzzing_engine}-{build.sanitizer}'
           f'-{build.architecture}')
 
 
-# pylint: disable=too-many-locals, too-many-statements, too-many-branches
-def get_build_steps(project_name,
-                    image_project,
-                    base_images_project,
-                    testing=False,
-                    branch=None,
-                    test_images=False):
+def get_build_steps(  # pylint: disable=too-many-locals, too-many-statements, too-many-branches, too-many-arguments
+    project_name,
+    image_project,
+    base_images_project,
+    testing=False,
+    branch=None,
+    test_images=False):
   """Returns build steps for project."""
 
   try:
@@ -266,8 +280,11 @@ def get_build_steps(project_name,
           build_steps.append(
               # Test fuzz targets.
               {
-                  'name': get_runner_image_name(base_images_project, testing), # !!!
-                  'env': env,
+                  'name':
+                      get_runner_image_name(base_images_project,
+                                            testing),  # !!!
+                  'env':
+                      env,
                   'args': [
                       'bash', '-c',
                       f'test_all.py || (echo "{failure_msg}" && false)'
@@ -299,8 +316,6 @@ def get_build_steps(project_name,
           else:
             sys.stderr.write('Skipping dataflow post build steps.\n')
 
-        targets_list_filename = build_lib.get_targets_list_filename(
-            build.sanitizer)
         build_steps.extend([
             # Generate targets list.
             {
@@ -310,7 +325,7 @@ def get_build_steps(project_name,
                     env,
                 'args': [
                     'bash', '-c',
-                    f'targets_list > /workspace/{targets_list_filename}'
+                    f'targets_list > /workspace/{build.targets_list_filename}'
                 ],
             }
         ])
@@ -321,11 +336,30 @@ def get_build_steps(project_name,
   return build_steps
 
 
-def get_upload_steps(project, build, timestamp, base_images_project, testing):
+def get_targets_list_upload_step(bucket, project, build, uploader_image):
+  """Returns the step to upload targets_list for |build| of |project| to
+  |bucket|."""
+  targets_list_url = build_lib.get_signed_url(
+      build_lib.get_targets_list_url(bucket, project.name, build.sanitizer))
+  return {
+      'name': uploader_image,
+      'args': [
+          f'/workspace/{build.targets_list_filename}',
+          targets_list_url,
+      ],
+  }
 
+
+def get_uploader_image(base_images_project):
+  """Returns the uploader base image in |base_images_project|."""
+  return f'gcr.io/{base_images_project}/uploader'
+
+
+def get_upload_steps(project, build, timestamp, base_images_project, testing):
+  """Returns the steps for uploading the fuzzer build specified by |project| and
+  |build|. Uses |timestamp| for naming the uploads. Uses |base_images_project|
+  and |testing| for determining which image to use for the upload."""
   bucket = build_lib.get_upload_bucket(build.fuzzing_engine, testing)
-  if build.architecture != 'x86_64':
-    bucket += '-' + build.architecture
   stamped_name = '-'.join([project.name, build.sanitizer, timestamp])
   zip_file = stamped_name + '.zip'
   upload_url = build_lib.get_signed_url(
@@ -340,9 +374,8 @@ def get_upload_steps(project, build, timestamp, base_images_project, testing):
       bucket, project.name, latest_version_file)
   latest_version_url = build_lib.get_signed_url(
       latest_version_url, content_type=LATEST_VERSION_CONTENT_TYPE)
-  targets_list_url = build_lib.get_signed_url(
-      build_lib.get_targets_list_url(bucket, project.name, build.sanitizer))
-  targets_list_filename = build_lib.get_targets_list_filename(build.sanitizer)
+  uploader_image = get_uploader_image(base_images_project)
+
   upload_steps = [
       # Zip binaries.
       {
@@ -351,7 +384,7 @@ def get_upload_steps(project, build, timestamp, base_images_project, testing):
       },
       # Upload srcmap.
       {
-          'name': f'gcr.io/{base_images_project}/uploader',
+          'name': uploader_image,
           'args': [
               '/workspace/srcmap.json',
               srcmap_url,
@@ -359,36 +392,38 @@ def get_upload_steps(project, build, timestamp, base_images_project, testing):
       },
       # Upload binaries.
       {
-          'name': f'gcr.io/{base_images_project}/uploader',
+          'name': uploader_image,
           'args': [
               os.path.join(build.out, zip_file),
               upload_url,
           ],
       },
       # Upload targets list.
-      {
-          'name': f'gcr.io/{base_images_project}/uploader',
-          'args': [
-              f'/workspace/{targets_list_filename}',
-              targets_list_url,
-          ],
-      },
+      get_targets_list_upload_step(bucket, project, build, uploader_image),
       # Upload the latest.version file.
       build_lib.http_upload_step(zip_file, latest_version_url,
                                  LATEST_VERSION_CONTENT_TYPE),
       # Cleanup.
-      {
-          'name': project.image,
-          'args': [
-              'bash',
-              '-c',
-              'rm -r ' + build.out,
-          ],
-      },
+      get_cleanup_step(project, build),
   ]
   return upload_steps
 
+
+def get_cleanup_step(project, build):
+  """Returns the step for cleaning up after doing |build| of |project|."""
+  return {
+      'name': project.image,
+      'args': [
+          'bash',
+          '-c',
+          'rm -r ' + build.out,
+      ],
+  }
+
+
 def get_runner_image_name(base_images_project, testing):
+  """Returns the runner image that should be used, based on
+  |base_images_project|. Returns the testing image if |testing|."""
   image = f'gcr.io/{base_images_project}/base-runner'
   if testing:
     image += '-testing'
@@ -461,6 +496,8 @@ def run_build(build_steps, project_name, tag):
 
 
 def get_args(description):
+  """Parses command line arguments and returns them. Suitable for a build
+  script."""
   parser = argparse.ArgumentParser(sys.argv[0], description=description)
   parser.add_argument('projects', help='Projects.', nargs='+')
   parser.add_argument('--testing',

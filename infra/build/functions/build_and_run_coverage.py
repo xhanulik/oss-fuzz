@@ -44,7 +44,8 @@ LATEST_REPORT_INFO_CONTENT_TYPE = 'application/json'
 LANGUAGES_WITH_COVERAGE_SUPPORT = ['c', 'c++', 'go', 'jvm', 'rust']
 
 
-class Bucket:
+class Bucket:  # pylint: disable=too-few-public-methods
+  """Class representing the coverage GCS bucket."""
 
   def __init__(self, project, date, platform, testing):
     self.coverage_bucket_name = 'oss-fuzz-coverage'
@@ -60,17 +61,18 @@ class Bucket:
                                    f'/latest_report_info/{project}.json')
 
   def get_upload_url(self, upload_type):
+    """Returns an upload url for |upload_type|."""
     return (f'gs://{self.coverage_bucket_name}/{self.project}'
             f'/{upload_type}/{self.date}')
 
 
-# pylint: disable=too-many-locals
-def get_build_steps(project_name,
-                    image_project,
-                    base_images_project,
-                    testing=False,
-                    branch=None,
-                    test_images=False):
+def get_build_steps(  # pylint: disable=too-many-locals, too-many-arguments
+    project_name,
+    image_project,
+    base_images_project,
+    testing=False,
+    branch=None,
+    test_images=False):
   """Returns build steps for project."""
   project = build_project.Project(project_name, image_project)
   if project.disabled:

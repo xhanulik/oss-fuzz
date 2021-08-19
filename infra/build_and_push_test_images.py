@@ -72,6 +72,8 @@ def build_and_push_images():
 
 
 def main():
+  """"Builds base-images tags them with "-testing" suffix (in addition to normal
+  tag) and pushes "-testing" suffixed images to docker registry."""
   logging.basicConfig(level=logging.DEBUG)
   logging.info('Doing simple gcloud command to ensure 2FA passes.')
   subprocess.run(['gcloud', 'projects', 'list', '--limit=1'], check=True)
