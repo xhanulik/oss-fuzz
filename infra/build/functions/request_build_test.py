@@ -28,9 +28,7 @@ sys.path.append(os.path.dirname(__file__))
 
 from datastore_entities import BuildsHistory
 from datastore_entities import Project
-from request_build import get_build_steps
-from request_build import get_project_data
-from request_build import update_build_history
+import request_build
 import test_utils
 
 # pylint: disable=no-member
@@ -73,15 +71,15 @@ class TestRequestBuilds(unittest.TestCase):
       Project(name='test-project',
               project_yaml_contents=project_yaml_contents,
               dockerfile_contents='test line').put()
-      build_steps = get_build_steps('test-project', image_project,
-                                    base_images_project)
+      build_steps = request_build.get_build_steps('test-project', image_project,
+                                                  base_images_project)
     self.assertEqual(build_steps, expected_build_steps)
 
   def test_get_build_steps_no_project(self):
     """Test for when project isn't available in datastore."""
     with ndb.Client().context():
-      self.assertRaises(RuntimeError, get_build_steps, 'test-project',
-                        'oss-fuzz', 'oss-fuzz-base')
+      self.assertRaises(RuntimeError, request_build.get_build_steps,
+                        'test-project', 'oss-fuzz', 'oss-fuzz-base')
 
   def test_build_history(self):
     """Testing build history."""
@@ -90,7 +88,7 @@ class TestRequestBuilds(unittest.TestCase):
                     build_tag='fuzzing',
                     project='test-project',
                     build_ids=[str(i) for i in range(1, 65)]).put()
-      update_build_history('test-project', '65', 'fuzzing')
+      request_build.update_build_history('test-project', '65', 'fuzzing')
       expected_build_ids = [str(i) for i in range(2, 66)]
 
       self.assertEqual(BuildsHistory.query().get().build_ids,
@@ -99,7 +97,7 @@ class TestRequestBuilds(unittest.TestCase):
   def test_build_history_no_existing_project(self):
     """Testing build history when build history object is missing."""
     with ndb.Client().context():
-      update_build_history('test-project', '1', 'fuzzing')
+      request_build.update_build_history('test-project', '1', 'fuzzing')
       expected_build_ids = ['1']
 
       self.assertEqual(BuildsHistory.query().get().build_ids,
@@ -108,7 +106,8 @@ class TestRequestBuilds(unittest.TestCase):
   def test_get_project_data(self):
     """Testing get project data."""
     with ndb.Client().context():
-      self.assertRaises(RuntimeError, get_project_data, 'test-project')
+      self.assertRaises(RuntimeError, request_build.get_project_data,
+                        'test-project')
 
   @classmethod
   def tearDownClass(cls):
