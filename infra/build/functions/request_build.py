@@ -56,17 +56,13 @@ def get_project_data(project_name):
   if not project:
     raise RuntimeError(
         f'Project {project_name} not available in cloud datastore')
-  project_yaml_contents = project.project_yaml_contents
-  dockerfile_lines = project.dockerfile_contents.split('\n')
-
-  return (project_yaml_contents, dockerfile_lines)
 
 
 def get_build_steps(project_name, image_project, base_images_project):
   """Retrieve build steps."""
-  project_yaml_contents, dockerfile_lines = get_project_data(project_name)
-  return build_project.get_build_steps(project_name, project_yaml_contents,
-                                       dockerfile_lines, image_project,
+  # !!!
+  get_project_data(project_name)
+  return build_project.get_build_steps(project_name, image_project,
                                        base_images_project)
 
 

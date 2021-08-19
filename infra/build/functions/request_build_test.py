@@ -22,18 +22,22 @@ import unittest
 from unittest import mock
 
 from google.cloud import ndb
+from pyfakefs import fake_filesystem_unittest
 
 sys.path.append(os.path.dirname(__file__))
 # pylint: disable=wrong-import-position
 
+import build_project
 import datastore_entities
 import request_build
 import test_utils
 
 # pylint: disable=no-member
 
+PROJECTS_DIR = os.path.join(test_utils.OSS_FUZZ_DIR, 'projects')
 
-class TestRequestBuilds(unittest.TestCase):
+
+class TestRequestBuilds(fake_filesystem_unittest.TestCase):
   """Unit tests for sync."""
 
   @classmethod
@@ -46,6 +50,7 @@ class TestRequestBuilds(unittest.TestCase):
   def setUp(self):
     test_utils.reset_ds_emulator()
     self.maxDiff = None  # pylint: disable=invalid-name
+    self.setUpPyfakefs()
 
   @mock.patch('build_lib.get_signed_url', return_value='test_url')
   @mock.patch('datetime.datetime')
@@ -56,22 +61,31 @@ class TestRequestBuilds(unittest.TestCase):
     project_yaml_contents = ('language: c++\n'
                              'sanitizers:\n'
                              '  - address\n'
+                             '  - memory\n'
+                             '  - undefined\n'
                              'architectures:\n'
-                             '  - x86_64\n')
+                             '  - x86_64\n'
+                             '  - i386\n')
+    project = 'test-project'
+    project_dir = os.path.join(PROJECTS_DIR, project)
+    self.fs.create_file(os.path.join(project_dir, 'project.yaml'),
+                        contents=project_yaml_contents)
+    dockerfile_contents = 'test line'
+    self.fs.create_file(os.path.join(project_dir, 'Dockerfile'),
+                        contents=dockerfile_contents)
+
     image_project = 'oss-fuzz'
     base_images_project = 'oss-fuzz-base'
+
     expected_build_steps_file_path = test_utils.get_test_data_file_path(
         'expected_build_steps.json')
 
+    self.fs.add_real_file(expected_build_steps_file_path)
     with open(expected_build_steps_file_path) as expected_build_steps_file:
       expected_build_steps = json.load(expected_build_steps_file)
 
-    with ndb.Client().context():
-      datastore_entities.Project(name='test-project',
-              project_yaml_contents=project_yaml_contents,
-              dockerfile_contents='test line').put()
-      build_steps = request_build.get_build_steps('test-project', image_project,
-                                                  base_images_project)
+    build_steps = build_project.get_build_steps(project, image_project,
+                                                base_images_project)
     self.assertEqual(build_steps, expected_build_steps)
 
   def test_get_build_steps_no_project(self):
