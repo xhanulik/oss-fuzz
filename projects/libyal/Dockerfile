@@ -16,7 +16,7 @@
 
 FROM gcr.io/oss-fuzz-base/base-builder
 
-RUN apt-get update && apt-get install -y make autoconf automake autopoint libtool pkg-config flex byacc
+RUN apt-get update && apt-get install -y make autoconf automake autopoint libtool pkg-config flex byacc liblz4-1:i386 zlib1g:i386
 
 RUN git clone --depth 1 https://github.com/libyal/libfplist.git libfplist
 RUN git clone --depth 1 https://github.com/libyal/libftxf.git libftxf
