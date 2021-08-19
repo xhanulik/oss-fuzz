@@ -77,8 +77,12 @@ class Project:
     self.image_project = image_project
     project_dir = os.path.join(PROJECTS_DIR, self.name)
     dockerfile_path = os.path.join(project_dir, 'Dockerfile')
-    with open(dockerfile_path) as dockerfile:
-      dockerfile_lines = dockerfile.readlines()
+    try:
+      with open(dockerfile_path) as dockerfile:
+        dockerfile_lines = dockerfile.readlines()
+    except FileNotFoundError:
+      logging.error('Project "%s" does not have a dockerfile.', self.name)
+      raise
     self.workdir = workdir_from_dockerfile(dockerfile_lines)
     if not self.workdir:
       self.workdir = '/src'
@@ -215,7 +219,11 @@ def get_build_steps(project_name,
                     test_images=False):
   """Returns build steps for project."""
 
-  project = Project(project_name, image_project)
+  try:
+    project = Project(project_name, image_project)
+    # !!! what is right way to do this?
+  except FileNotFoundError:
+    return []
 
   if project.disabled:
     logging.info('Project "%s" is disabled.', project.name)
@@ -488,6 +496,9 @@ def main():
                             testing=args.testing,
                             test_images=args.test_images,
                             branch=args.branch)
+    if not steps:
+      logging.error('No steps. Skipping build for %s.', project)
+      continue
 
     run_build(steps, project, FUZZING_BUILD_TAG)
 
