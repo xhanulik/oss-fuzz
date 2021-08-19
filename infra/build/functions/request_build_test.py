@@ -14,12 +14,9 @@
 #
 ################################################################################
 """Unit tests for Cloud Function request builds which builds projects."""
-import json
-import datetime
 import os
 import sys
 import unittest
-from unittest import mock
 
 from google.cloud import ndb
 
@@ -57,9 +54,10 @@ class TestRequestBuilds(unittest.TestCase):
     """Testing build history."""
     with ndb.Client().context():
       datastore_entities.BuildsHistory(id='test-project-fuzzing',
-                    build_tag='fuzzing',
-                    project='test-project',
-                    build_ids=[str(i) for i in range(1, 65)]).put()
+                                       build_tag='fuzzing',
+                                       project='test-project',
+                                       build_ids=[str(i) for i in range(1, 65)
+                                                 ]).put()
       request_build.update_build_history('test-project', '65', 'fuzzing')
       expected_build_ids = [str(i) for i in range(2, 66)]
 

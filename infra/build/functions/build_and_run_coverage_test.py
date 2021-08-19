@@ -32,6 +32,8 @@ import test_utils
 
 # pylint: disable=no-member
 
+PROJECTS_DIR = os.path.join(test_utils.OSS_FUZZ_DIR, 'projects')
+
 
 class TestRequestCoverageBuilds(fake_filesystem_unittest.TestCase):
   """Unit tests for sync."""

@@ -78,5 +78,6 @@ class TestRequestCoverageBuilds(fake_filesystem_unittest.TestCase):
                                                 base_images_project)
     self.assertEqual(build_steps, expected_build_steps)
 
+
 if __name__ == '__main__':
   unittest.main(exit=False)
