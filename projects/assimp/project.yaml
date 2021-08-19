@@ -5,6 +5,6 @@ sanitizers:
   - address
 # Disabled MSAN because of https://github.com/google/oss-fuzz/issues/6180
 #  - memory
-     experimental: True
+#     experimental: True
   - undefined
 main_repo: 'https://github.com/assimp/assimp.git'
