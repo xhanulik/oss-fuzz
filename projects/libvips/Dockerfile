@@ -26,7 +26,9 @@ RUN apt-get update && apt-get install -y \
   libexpat1-dev \
   libffi-dev \
   libselinux1-dev \
-  glib2.0-dev
+  glib2.0-dev \
+  autopoint \
+  gettext
 RUN mkdir afl-testcases
 RUN curl https://lcamtuf.coredump.cx/afl/demo/afl_testcases.tgz | tar xzC afl-testcases
 RUN git clone --depth 1 https://github.com/libvips/libvips
