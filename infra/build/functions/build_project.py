@@ -30,11 +30,10 @@ import posixpath
 import re
 import sys
 
+from googleapiclient.discovery import build as cloud_build
+import oauth2client.client
 import six
 import yaml
-
-import oauth2client.client
-from googleapiclient.discovery import build as cloud_build
 
 import build_lib
 
@@ -213,9 +212,9 @@ def get_compile_step(project, build, env):
            f'mkdir -p {build.out} && compile || '
            f'(echo "{failure_msg}" && false)'),
       ],
-      # 'waitFor':
-      #     build_lib.get_srcmap_step_id(),
-      # 'id': get_id('compile', build),
+      'waitFor':
+          build_lib.get_srcmap_step_id(),
+      'id': get_id('compile', build),
   }
 
 
@@ -291,8 +290,8 @@ def get_build_steps(  # pylint: disable=too-many-locals, too-many-statements, to
                       'bash', '-c',
                       f'test_all.py || (echo "{failure_msg}" && false)'
                   ],
-                  # 'waitFor': get_last_step_id(build_steps),
-                  # 'id': get_id('build-check', build)
+                  'waitFor': get_last_step_id(build_steps),
+                  'id': get_id('build-check', build)
               })
 
         if project.labels:

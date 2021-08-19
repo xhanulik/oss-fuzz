@@ -232,7 +232,7 @@ def get_pull_test_image_steps():
             'pull',
             test_image,
         ],
-        # 'waitFor': '-'  # Start this immediately, don't wait for previous step.
+        'waitFor': '-'  # Start this immediately, don't wait for previous step.
     })
 
     # This step is hacky but gives us great flexibility. OSS-Fuzz has hardcoded
@@ -295,8 +295,7 @@ def project_image_steps(name, image, language, branch=None, test_images=False):
               'OSSFUZZ_REVISION=$REVISION_ID',
               'FUZZING_LANGUAGE=%s' % language,
           ],
-          # !!!
-          # 'id': srcmap_step_id
+          'id': srcmap_step_id
       }
   ]
 
