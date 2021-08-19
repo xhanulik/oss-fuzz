@@ -70,6 +70,8 @@ ENGINE_INFO = {
                    supported_architectures=['x86_64']),
 }
 
+DEFAULT_GCB_OPTIONS = {'machineType': 'N1_HIGHCPU_32'}
+
 
 def get_targets_list_filename(sanitizer):
   """Returns target list filename."""

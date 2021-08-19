@@ -33,12 +33,12 @@ import sys
 import six
 import yaml
 
-from oauth2client.client import GoogleCredentials
+import oauth2client.client
 from googleapiclient.discovery import build as cloud_build
 
 import build_lib
 
-FUZZING_BUILD_TAG = 'fuzzing'
+FUZZING_BUILD_TYPE = 'fuzzing'
 
 GCB_LOGS_BUCKET = 'oss-fuzz-gcb-logs'
 
@@ -54,6 +54,8 @@ QUEUE_TTL_SECONDS = 60 * 60 * 24  # 24 hours.
 PROJECTS_DIR = os.path.abspath(
     os.path.join(__file__, os.path.pardir, os.path.pardir, os.path.pardir,
                  os.path.pardir, 'projects'))
+
+DEFAULT_GCB_OPTIONS = {'machineType': 'N1_HIGHCPU_32'}
 
 
 class Build:  # pylint: disable=too-few-public-methods
@@ -467,32 +469,41 @@ def get_logs_url(build_id, image_project='oss-fuzz'):
 
 
 # pylint: disable=no-member
-def run_build(build_steps, project_name, tag):
-  """Run the build for given steps on cloud build."""
+def run_build(oss_fuzz_project,
+              build_steps,
+              credentials,
+              build_type,
+              cloud_project='oss-fuzz'):
+  """Run the build for given steps on cloud build. |build_steps| are the steps
+  to run. |credentials| are are used to authenticate to GCB and build in
+  |cloud_project|. |oss_fuzz_project| and |build_type| are used to tag the build
+  in GCB so the build can be queried for debugging purposes."""
   options = {}
   if 'GCB_OPTIONS' in os.environ:
     options = yaml.safe_load(os.environ['GCB_OPTIONS'])
+  else:
+    options = DEFAULT_GCB_OPTIONS
 
   build_body = {
       'steps': build_steps,
       'timeout': str(build_lib.BUILD_TIMEOUT) + 's',
       'options': options,
       'logsBucket': GCB_LOGS_BUCKET,
-      'tags': [project_name + '-' + tag,],
+      'tags': [oss_fuzz_project + '-' + build_type,],
       'queueTtl': str(QUEUE_TTL_SECONDS) + 's',
   }
 
-  credentials = GoogleCredentials.get_application_default()
   cloudbuild = cloud_build('cloudbuild',
                            'v1',
                            credentials=credentials,
                            cache_discovery=False)
-  build_info = cloudbuild.projects().builds().create(projectId='oss-fuzz',
+  build_info = cloudbuild.projects().builds().create(projectId=cloud_project,
                                                      body=build_body).execute()
   build_id = build_info['metadata']['build']['id']
 
-  print('Logs:', get_logs_url(build_id), file=sys.stderr)
-  print(build_id)
+  logging.info('Build ID: %s', build_id)
+  logging.info('Logs: %s', get_logs_url(build_id, cloud_project))
+  return build_id
 
 
 def get_args(description):
@@ -517,28 +528,41 @@ def get_args(description):
   return parser.parse_args()
 
 
-def main():
-  """Build and run projects."""
-  args = get_args('Builds a project on GCB.')
+def build_script_main(script_description, get_build_steps_func, build_type):
+  """Gets arguments from command line using |script_description| as helpstring
+  description. Gets build_steps using |get_build_steps_func| and then runs those
+  steps on GCB, tagging the builds with |build_type|. Returns 0 on success, 1 on
+  failure."""
+  args = get_args(script_description)
   logging.basicConfig(level=logging.INFO)
 
   image_project = 'oss-fuzz'
   base_images_project = 'oss-fuzz-base'
 
-  for project in args.projects:
-    logging.info('Getting steps for: "%s".', project)
-    steps = get_build_steps(project,
-                            image_project,
-                            base_images_project,
-                            testing=args.testing,
-                            test_images=args.test_images,
-                            branch=args.branch)
+  credentials = oauth2client.client.GoogleCredentials.get_application_default()
+  error = False
+  for oss_fuzz_project in args.projects:
+    logging.info('Getting steps for: "%s".', oss_fuzz_project)
+    steps = get_build_steps_func(oss_fuzz_project,
+                                 image_project,
+                                 base_images_project,
+                                 testing=args.testing,
+                                 test_images=args.test_images,
+                                 branch=args.branch)
     if not steps:
-      logging.error('No steps. Skipping build for %s.', project)
+      logging.error('No steps. Skipping %s.', oss_fuzz_project)
+      error = True
       continue
 
-    run_build(steps, project, FUZZING_BUILD_TAG)
+    run_build(oss_fuzz_project, steps, credentials, build_type)
+  return 0 if not error else 1
+
+
+def main():
+  """Build and run projects."""
+  return build_script_main('Builds a project on GCB.', get_build_steps,
+                           FUZZING_BUILD_TYPE)
 
 
 if __name__ == '__main__':
-  main()
+  sys.exit(main())

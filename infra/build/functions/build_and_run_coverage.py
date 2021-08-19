@@ -21,6 +21,7 @@ import datetime
 import json
 import logging
 import os
+import sys
 
 import build_lib
 import build_project
@@ -31,7 +32,7 @@ ARCHITECTURE = 'x86_64'
 
 PLATFORM = 'linux'
 
-COVERAGE_BUILD_TAG = 'coverage'
+COVERAGE_BUILD_TYPE = 'coverage'
 
 # Where code coverage reports need to be uploaded to.
 COVERAGE_BUCKET_NAME = 'oss-fuzz-coverage'
@@ -225,22 +226,10 @@ def get_build_steps(  # pylint: disable=too-many-locals, too-many-arguments
 
 def main():
   """Build and run coverage for projects."""
-  args = build_project.get_args('Generates coverage report for project.')
-  logging.basicConfig(level=logging.INFO)
-  image_project = 'oss-fuzz'
-  base_images_project = 'oss-fuzz-base'
-
-  for project in args.projects:
-    logging.info('Getting steps for: "%s".', project)
-    steps = get_build_steps(project,
-                            image_project,
-                            base_images_project,
-                            testing=args.testing,
-                            test_images=args.test_images,
-                            branch=args.branch)
-
-    build_project.run_build(steps, project, COVERAGE_BUILD_TAG)
+  return build_project.build_script_main(
+      'Generates coverage report for project.', get_build_steps,
+      COVERAGE_BUILD_TYPE)
 
 
 if __name__ == '__main__':
-  main()
+  sys.exit(main())
