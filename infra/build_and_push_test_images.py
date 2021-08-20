@@ -61,8 +61,8 @@ def build_and_push_images():
   images = [
       ['base-image'],
       ['base-clang', 'base-runner'],
-      ['base-builder', 'base-runner-debug'],
-      # ['base-builder', 'base-runner-debug', 'base-sanitizer-build-libs'],
+      ['base-builder', 'base-runner-debug', 'base-builder-new'],
+      ['base-runner-debug', 'base-sanitizer-build-libs', 'base-builder-swift'],
   ]
   max_parallelization = max([len(image_list) for image_list in images])
   proc_count = min(multiprocessing.cpu_count(), max_parallelization)
