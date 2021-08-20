@@ -23,8 +23,8 @@ PACKAGES=(
     libblocksruntime-dev
     libiberty-dev
     liblzma-dev
+    zlib1g-dev
     pkg-config)
-# Don't install zlib1g-dev here. autoremoving it uninstalls python3.
 
 apt-get install -y ${PACKAGES[@]}
 
