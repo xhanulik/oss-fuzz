@@ -63,7 +63,8 @@ by running the following commands:
 ```bash
 $ cd /path/to/oss-fuzz
 $ export PROJECT_NAME=<project_name>
-$ python infra/helper.py generate $PROJECT_NAME
+$ export LANGUAGE=<project_language>
+$ python infra/helper.py generate $PROJECT_NAME --language=$LANGUAGE
 ```
 
 Once the template configuration files are created, you can modify them to fit your project.
@@ -389,8 +390,9 @@ following ways:
 
 ### Seed Corpus
 
-OSS-Fuzz uses evolutionary fuzzing algorithms. Supplying seed corpus consisting
-of good sample inputs is one of the best ways to improve [fuzz target]({{ site.baseurl }}/reference/glossary/#fuzz-target)'s coverage.
+Most fuzzing engines use evolutionary fuzzing algorithms. Supplying a seed
+corpus consisting of good sample inputs is one of the best ways to improve [fuzz
+target]({{ site.baseurl }}/reference/glossary/#fuzz-target)'s coverage.
 
 To provide a corpus for `my_fuzzer`, put `my_fuzzer_seed_corpus.zip` file next
 to the [fuzz target]({{ site.baseurl }}/reference/glossary/#fuzz-target)'s binary in `$OUT` during the build. Individual files in this
@@ -403,7 +405,7 @@ Seed corpus files will be used for cross-mutations and portions of them might ap
 in bug reports or be used for further security research. It is important that corpus
 has an appropriate and consistent license.
 
-See also [Accessing Corpora]({{ site.baseurl }}/advanced-topics/corpora/) for information about getting access to the corpus we are currently using for your fuzz targets.
+OSS-Fuzz only: See also [Accessing Corpora]({{ site.baseurl }}/advanced-topics/corpora/) for information about getting access to the corpus we are currently using for your fuzz targets.
 
 ### Dictionaries
 

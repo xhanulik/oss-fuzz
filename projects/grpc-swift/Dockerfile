@@ -14,36 +14,8 @@
 #
 ################################################################################
 
-FROM gcr.io/oss-fuzz-base/base-builder
+FROM gcr.io/oss-fuzz-base/base-builder-swift
 
-# generic swift
-RUN apt-get update && apt-get install -y wget \
-           binutils \
-           libc6-dev \
-           libcurl4 \
-           libgcc-9-dev \
-           libedit2 \
-           libtinfo5 \
-           libpython3.8 \
-           libsqlite3-0 \
-           libstdc++-9-dev \
-           libxml2 \
-           pkg-config \
-           libz3-dev \
-           tzdata \
-           zlib1g-dev
-ENV SWIFT_RELEASE=swift-5.4.2-RELEASE-ubuntu20.04
-RUN wget -q https://swift.org/builds/swift-5.4.2-release/ubuntu2004/swift-5.4.2-RELEASE/$SWIFT_RELEASE.tar.gz
-RUN tar xzf $SWIFT_RELEASE.tar.gz
-RUN cp -r $SWIFT_RELEASE/usr/* /usr/
-
-# generic swift symbolizer
-RUN apt-get update && apt-get install -y build-essential make \
-    ninja-build git python3 g++-multilib binutils-dev zlib1g-dev \
-    --no-install-recommends
-
-RUN git clone --depth 1 https://github.com/llvm/llvm-project.git
-COPY llvmsymbol.diff $SRC
 
 # specific to project
 RUN git clone --depth 1 https://github.com/grpc/grpc-swift
