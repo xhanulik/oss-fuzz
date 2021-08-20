@@ -15,7 +15,9 @@
 #
 ################################################################################
 
-python3 setup.py install
+# In some setups on Ubuntu 20.04, distutils will default to using gcc to link
+# shared objects causing it to error when given sanitizer flags.
+LDSHARED="clang -shared" python3 setup.py install
 
 # Build fuzzers in $OUT.
 for fuzzer in $(find $SRC -name 'fuzz_*.py'); do
