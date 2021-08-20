@@ -16,7 +16,6 @@
 
 FROM gcr.io/oss-fuzz-base/base-builder-swift
 
-
 # specific to project
 RUN git clone --depth 1 https://github.com/grpc/grpc-swift
 COPY build.sh $SRC
