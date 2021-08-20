@@ -13,9 +13,10 @@
 # limitations under the License.
 #
 ################################################################################
-#!/usr/bin/python2
+#!/usr/bin/env python3
 """Starts and runs coverage build on Google Cloud Builder.
-Usage: build_and_run_coverage.py project
+
+Usage: build_and_run_coverage.py <project>.
 """
 import datetime
 import json
@@ -226,9 +227,7 @@ def get_build_steps(  # pylint: disable=too-many-locals, too-many-arguments
 
 def main():
   """Build and run coverage for projects."""
-  return build_project.build_script_main(
-      'Generates coverage report for project.', get_build_steps,
-      COVERAGE_BUILD_TYPE)
+  return build_project.build_script_main('Generates coverage report for project.', get_build_steps, COVERAGE_BUILD_TYPE)
 
 
 if __name__ == '__main__':

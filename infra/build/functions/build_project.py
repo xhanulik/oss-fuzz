@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 ################################################################################
-#!/usr/bin/python2
+#!/usr/bin/env python3
 """Starts project build on Google Cloud Builder.
 
 Usage: build_project.py <project_dir>
