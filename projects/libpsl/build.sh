@@ -31,8 +31,6 @@ CXXFLAGS="$CXXFLAGS -fno-sanitize=vptr" \
 CPPFLAGS="$CPPFLAGS -fno-sanitize=vptr" \
 ./configure --disable-shared --enable-static --disable-extras --disable-icuio --disable-layoutex \
   --disable-tests --disable-samples --with-data-packaging=static --prefix=$DEPS_PATH
-# ugly hack to avoid build error
-echo '#include <locale.h>' >>i18n/digitlst.h
 make -j
 make install
 
