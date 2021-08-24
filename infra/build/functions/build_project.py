@@ -22,6 +22,7 @@ Usage: build_project.py <project_dir>
 from __future__ import print_function
 
 import argparse
+import collections
 import datetime
 import json
 import logging
@@ -55,6 +56,9 @@ PROJECTS_DIR = os.path.abspath(
                  os.path.pardir, 'projects'))
 
 DEFAULT_GCB_OPTIONS = {'machineType': 'N1_HIGHCPU_32'}
+
+Config = collections.namedtuple(
+    'Config', ['testing', 'test_images', 'branch', 'parallel'])
 
 
 class Build:  # pylint: disable=too-few-public-methods
@@ -187,7 +191,7 @@ def get_env(fuzzing_language, build):
   return list(sorted([f'{key}={value}' for key, value in env_dict.items()]))
 
 
-def get_compile_step(project, build, env):
+def get_compile_step(project, build, env, parallel):
   """Returns the GCB step for compiling |projects| fuzzers using |env|. The type
   of build is specified by |build|."""
   failure_msg = (
@@ -196,7 +200,7 @@ def get_compile_step(project, build, env):
       'python infra/helper.py build_fuzzers --sanitizer '
       f'{build.sanitizer} --engine {build.fuzzing_engine} --architecture '
       f'{build.architecture} {project.name}\n' + '*' * 80)
-  return {
+  compile_step = {
       'name': project.image,
       'env': env,
       'args': [
@@ -210,9 +214,17 @@ def get_compile_step(project, build, env):
            f'mkdir -p {build.out} && compile || '
            f'(echo "{failure_msg}" && false)'),
       ],
-      'waitFor': build_lib.get_srcmap_step_id(),
       'id': get_id('compile', build),
   }
+  if parallel:
+    maybe_add_parallel(compile_step, build_lib.get_srcmap_step_id(), parallel)
+  return compile_step
+
+
+def maybe_add_parallel(step, wait_for_id, parallel):
+  if not parallel:
+    return
+  step['waitFor'] = wait_for_id
 
 
 def get_id(step_type, build):
@@ -223,12 +235,7 @@ def get_id(step_type, build):
 
 
 def get_build_steps(  # pylint: disable=too-many-locals, too-many-statements, too-many-branches, too-many-arguments
-    project_name,
-    image_project,
-    base_images_project,
-    testing=False,
-    branch=None,
-    test_images=False):
+    project_name, image_project, base_images_project, config):
   """Returns build steps for project."""
 
   try:
@@ -246,8 +253,8 @@ def get_build_steps(  # pylint: disable=too-many-locals, too-many-statements, to
   build_steps = build_lib.project_image_steps(project.name,
                                               project.image,
                                               project.fuzzing_language,
-                                              branch=branch,
-                                              test_images=test_images)
+                                              branch=config.branch,
+                                              test_images=config.test_images)
 
   # Sort engines to make AFL first to test if libFuzzer has an advantage in
   # finding bugs first since it is generally built first.
@@ -259,7 +266,7 @@ def get_build_steps(  # pylint: disable=too-many-locals, too-many-statements, to
           continue
 
         env = get_env(project.fuzzing_language, build)
-        compile_step = get_compile_step(project, build, env)
+        compile_step = get_compile_step(project, build, env, config.parallel)
         build_steps.append(compile_step)
 
         if project.run_tests:
@@ -274,20 +281,23 @@ def get_build_steps(  # pylint: disable=too-many-locals, too-many-statements, to
               f'{build.sanitizer} --engine {build.fuzzing_engine} '
               f'--architecture {build.architecture} {project.name}\n' +
               '*' * 80)
-
-          build_steps.append(
-              # Test fuzz targets.
-              {
-                  'name': get_runner_image_name(base_images_project,
-                                                testing),  # !!!
-                  'env': env,
-                  'args': [
-                      'bash', '-c',
-                      f'test_all.py || (echo "{failure_msg}" && false)'
-                  ],
-                  'waitFor': get_last_step_id(build_steps),
-                  'id': get_id('build-check', build)
-              })
+          # Test fuzz targets.
+          test_step = {
+              'name':
+                  get_runner_image_name(base_images_project,
+                                        config.testing),  # !!!
+              'env':
+                  env,
+              'args': [
+                  'bash', '-c',
+                  f'test_all.py || (echo "{failure_msg}" && false)'
+              ],
+              'id':
+                  get_id('build-check', build)
+          }
+          maybe_add_parallel(test_step, get_last_step_id(build_steps),
+                             config.parallel)
+          build_steps.append(test_step)
 
         if project.labels:
           # Write target labels.
@@ -306,7 +316,7 @@ def get_build_steps(  # pylint: disable=too-many-locals, too-many-statements, to
         if build.sanitizer == 'dataflow' and build.fuzzing_engine == 'dataflow':
           dataflow_steps = dataflow_post_build_steps(project.name, env,
                                                      base_images_project,
-                                                     testing)
+                                                     config.testing)
           if dataflow_steps:
             build_steps.extend(dataflow_steps)
           else:
@@ -316,7 +326,7 @@ def get_build_steps(  # pylint: disable=too-many-locals, too-many-statements, to
             # Generate targets list.
             {
                 'name':
-                    get_runner_image_name(base_images_project, testing),
+                    get_runner_image_name(base_images_project, config.testing),
                 'env':
                     env,
                 'args': [
@@ -326,7 +336,7 @@ def get_build_steps(  # pylint: disable=too-many-locals, too-many-statements, to
             }
         ])
         upload_steps = get_upload_steps(project, build, timestamp,
-                                        base_images_project, testing)
+                                        base_images_project, config.testing)
         build_steps.extend(upload_steps)
 
   return build_steps
@@ -526,6 +536,10 @@ def get_args(description):
                       required=False,
                       default=None,
                       help='Use specified OSS-Fuzz branch.')
+  parser.add_argument('--parallel',
+                      required=False,
+                      default=None,
+                      help='Do builds in parallel.')
   return parser.parse_args()
 
 
@@ -542,14 +556,11 @@ def build_script_main(script_description, get_build_steps_func, build_type):
 
   credentials = oauth2client.client.GoogleCredentials.get_application_default()
   error = False
+  config = Config(args.testing, args.test_images, args.branch, args.parallel)
   for oss_fuzz_project in args.projects:
     logging.info('Getting steps for: "%s".', oss_fuzz_project)
-    steps = get_build_steps_func(oss_fuzz_project,
-                                 image_project,
-                                 base_images_project,
-                                 testing=args.testing,
-                                 test_images=args.test_images,
-                                 branch=args.branch)
+    steps = get_build_steps_func(oss_fuzz_project, image_project,
+                                 base_images_project, config)
     if not steps:
       logging.error('No steps. Skipping %s.', oss_fuzz_project)
       error = True

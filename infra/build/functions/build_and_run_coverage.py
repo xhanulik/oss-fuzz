@@ -69,12 +69,7 @@ class Bucket:  # pylint: disable=too-few-public-methods
 
 
 def get_build_steps(  # pylint: disable=too-many-locals, too-many-arguments
-    project_name,
-    image_project,
-    base_images_project,
-    testing=False,
-    branch=None,
-    test_images=False):
+    project_name, image_project, base_images_project, config):
   """Returns build steps for project."""
   project = build_project.Project(project_name, image_project)
   if project.disabled:
@@ -88,19 +83,20 @@ def get_build_steps(  # pylint: disable=too-many-locals, too-many-arguments
     return []
 
   report_date = datetime.datetime.now().strftime('%Y%m%d')
-  bucket = Bucket(project.name, report_date, PLATFORM, testing)
+  bucket = Bucket(project.name, report_date, PLATFORM, config.testing)
 
   build_steps = build_lib.project_image_steps(project.name,
                                               project.image,
                                               project.fuzzing_language,
-                                              branch=branch,
-                                              test_images=test_images)
+                                              branch=config.branch,
+                                              test_images=config.test_images)
 
   build = build_project.Build('libfuzzer', 'coverage', 'x86_64')
   env = build_project.get_env(project.fuzzing_language, build)
-  build_steps.append(build_project.get_compile_step(project, build, env))
-  download_corpora_steps = build_lib.download_corpora_steps(project.name,
-                                                            testing=testing)
+  build_steps.append(
+      build_project.get_compile_step(project, build, env, config.parallel))
+  download_corpora_steps = build_lib.download_corpora_steps(
+      project.name, testing=config.testing)
   if not download_corpora_steps:
     logging.info('Skipping code coverage build for %s.', project.name)
     return []
@@ -123,8 +119,11 @@ def get_build_steps(  # pylint: disable=too-many-locals, too-many-arguments
     coverage_env.append('FULL_SUMMARY_PER_TARGET=1')
 
   build_steps.append({
-      'name': build_project.get_runner_image_name(base_images_project, testing),
-      'env': coverage_env,
+      'name':
+          build_project.get_runner_image_name(base_images_project,
+                                              config.testing),
+      'env':
+          coverage_env,
       'args': [
           'bash', '-c',
           ('for f in /corpus/*.zip; do unzip -q $f -d ${f%%.*} || ('
