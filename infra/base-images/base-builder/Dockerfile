@@ -18,7 +18,10 @@ FROM gcr.io/oss-fuzz-base/base-clang
 
 RUN dpkg --add-architecture i386 && \
     apt-get update && \
-    apt-get upgrade && \
+    apt-get install -y software-properties-common && \
+    apt-add-repository ppa:git-core/ppa && \
+    apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y \
         binutils-dev \
         build-essential \
@@ -58,7 +61,6 @@ RUN export PYTHON_DEPS="\
     rm -r /tmp/Python-$PYTHON_VERSION.tar.xz /tmp/Python-$PYTHON_VERSION && \
     rm -rf /usr/local/lib/python3.8/test && \
     apt-get remove -y $PYTHON_DEPS # https://github.com/google/oss-fuzz/issues/3888
-
 
 # Install latest atheris for python fuzzing, pyinstaller for fuzzer packaging,
 # six for Bazel rules.
