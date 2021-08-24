@@ -273,30 +273,26 @@ def project_image_steps(name, image, language, branch=None, test_images=False):
     steps.extend(get_pull_test_image_steps())
 
   srcmap_step_id = get_srcmap_step_id()
-  steps += [
-      {
-          'name': 'gcr.io/cloud-builders/docker',
-          'args': [
-              'build',
-              '-t',
-              image,
-              '.',
-          ],
-          'dir': 'oss-fuzz/projects/' + name,
-      },
-      {
-          'name':
-              image,
-          'args': [
-              'bash', '-c',
-              'srcmap > /workspace/srcmap.json && cat /workspace/srcmap.json'
-          ],
-          'env': [
-              'OSSFUZZ_REVISION=$REVISION_ID',
-              'FUZZING_LANGUAGE=%s' % language,
-          ],
-          'id': srcmap_step_id
-      }
-  ]
+  steps += [{
+      'name': 'gcr.io/cloud-builders/docker',
+      'args': [
+          'build',
+          '-t',
+          image,
+          '.',
+      ],
+      'dir': 'oss-fuzz/projects/' + name,
+  }, {
+      'name': image,
+      'args': [
+          'bash', '-c',
+          'srcmap > /workspace/srcmap.json && cat /workspace/srcmap.json'
+      ],
+      'env': [
+          'OSSFUZZ_REVISION=$REVISION_ID',
+          'FUZZING_LANGUAGE=%s' % language,
+      ],
+      'id': srcmap_step_id
+  }]
 
   return steps

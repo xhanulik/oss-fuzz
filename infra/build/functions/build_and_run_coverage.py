@@ -227,7 +227,9 @@ def get_build_steps(  # pylint: disable=too-many-locals, too-many-arguments
 
 def main():
   """Build and run coverage for projects."""
-  return build_project.build_script_main('Generates coverage report for project.', get_build_steps, COVERAGE_BUILD_TYPE)
+  return build_project.build_script_main(
+      'Generates coverage report for project.', get_build_steps,
+      COVERAGE_BUILD_TYPE)
 
 
 if __name__ == '__main__':

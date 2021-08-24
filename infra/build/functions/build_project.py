@@ -197,10 +197,8 @@ def get_compile_step(project, build, env):
       f'{build.sanitizer} --engine {build.fuzzing_engine} --architecture '
       f'{build.architecture} {project.name}\n' + '*' * 80)
   return {
-      'name':
-          project.image,
-      'env':
-          env,
+      'name': project.image,
+      'env': env,
       'args': [
           'bash',
           '-c',
@@ -212,8 +210,7 @@ def get_compile_step(project, build, env):
            f'mkdir -p {build.out} && compile || '
            f'(echo "{failure_msg}" && false)'),
       ],
-      'waitFor':
-          build_lib.get_srcmap_step_id(),
+      'waitFor': build_lib.get_srcmap_step_id(),
       'id': get_id('compile', build),
   }
 
@@ -281,11 +278,9 @@ def get_build_steps(  # pylint: disable=too-many-locals, too-many-statements, to
           build_steps.append(
               # Test fuzz targets.
               {
-                  'name':
-                      get_runner_image_name(base_images_project,
-                                            testing),  # !!!
-                  'env':
-                      env,
+                  'name': get_runner_image_name(base_images_project,
+                                                testing),  # !!!
+                  'env': env,
                   'args': [
                       'bash', '-c',
                       f'test_all.py || (echo "{failure_msg}" && false)'
@@ -460,11 +455,16 @@ def dataflow_post_build_steps(project_name, env, base_images_project, testing):
   return steps
 
 
-def get_logs_url(build_id, image_project='oss-fuzz'):
+def get_logs_url(build_id, cloud_project='oss-fuzz'):
   """Returns url where logs are displayed for the build."""
-  url_format = ('https://console.developers.google.com/logs/viewer?'
-                'resource=build%2Fbuild_id%2F{0}&project={1}')
-  return url_format.format(build_id, image_project)
+  return ('https://console.cloud.google.com/logs/viewer?'
+          f'resource=build%2Fbuild_id%2F{build_id}&project={cloud_project}')
+
+
+def get_gcb_url(build_id, cloud_project='oss-fuzz'):
+  """Returns url where logs are displayed for the build."""
+  return (f'https://console.cloud.google.com/cloud-build/builds/{build_id}'
+          f'?project={cloud_project}')
 
 
 # pylint: disable=no-member
@@ -483,12 +483,13 @@ def run_build(oss_fuzz_project,
   else:
     options = DEFAULT_GCB_OPTIONS
 
+  tags = [oss_fuzz_project + '-' + build_type, build_type, oss_fuzz_project]
   build_body = {
       'steps': build_steps,
       'timeout': str(build_lib.BUILD_TIMEOUT) + 's',
       'options': options,
       'logsBucket': GCB_LOGS_BUCKET,
-      'tags': [oss_fuzz_project + '-' + build_type,],
+      'tags': tags,
       'queueTtl': str(QUEUE_TTL_SECONDS) + 's',
   }
 
@@ -502,6 +503,7 @@ def run_build(oss_fuzz_project,
 
   logging.info('Build ID: %s', build_id)
   logging.info('Logs: %s', get_logs_url(build_id, cloud_project))
+  logging.info('Cloud build page: %s', get_gcb_url(build_id, cloud_project))
   return build_id
 
 
