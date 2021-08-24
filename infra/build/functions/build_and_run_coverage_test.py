@@ -28,6 +28,7 @@ sys.path.append(FUNCTIONS_DIR)
 # pylint: disable=wrong-import-position
 
 import build_and_run_coverage
+import build_project
 import test_utils
 
 # pylint: disable=no-member
