@@ -20,7 +20,6 @@ FROM gcr.io/oss-fuzz-base/base-builder:xenial
 # Delete line above and uncomment line below to upgrade to 20.04.
 # FROM gcr.io/oss-fuzz-base/base-builder
 
-
 # Packages taken from:
 # * https://github.com/bitcoin/bitcoin/blob/master/doc/build-unix.md#dependency-build-instructions
 # * https://github.com/bitcoin/bitcoin/blob/master/depends/README.md#for-linux-including-i386-arm-cross-compilation

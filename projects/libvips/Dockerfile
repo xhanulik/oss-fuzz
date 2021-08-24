@@ -36,9 +36,7 @@ RUN apt-get update && apt-get install -y \
   gettext \
   libtool \
   glib2.0-dev
-
 RUN pip3 install meson ninja
-
 RUN mkdir afl-testcases
 RUN curl https://lcamtuf.coredump.cx/afl/demo/afl_testcases.tgz | tar xzC afl-testcases
 RUN git clone --depth 1 https://github.com/libvips/libvips
