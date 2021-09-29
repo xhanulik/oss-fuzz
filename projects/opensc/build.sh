@@ -28,4 +28,7 @@ for F in $fuzzerFiles; do
     if [ -d "$SRC/opensc/src/tests/fuzzing/corpus/${fuzzerName}" ]; then
         zip -j $OUT/${fuzzerName}_seed_corpus.zip $SRC/opensc/src/tests/fuzzing/corpus/${fuzzerName}/*
     fi
+    if [ -d "$SRC/opensc/src/tests/fuzzing/dictionary/${fuzzerName}" ]; then
+	cp "$SRC/opensc/src/tests/fuzzing/dictionary/${fuzzerName}" $OUT/${fuzzerName}.dict
+    fi	
 done
