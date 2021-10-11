@@ -204,11 +204,6 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
   on error."""
   logging.basicConfig(level=logging.INFO)
 
-  if CONTAINER_ENGINE == 'podman':
-    # we do not need to do it for the rest of the files under this path
-    # as the context is inherited from the parent directory
-    fix_selinux_context(BUILD_DIR)
-
   parser = get_parser()
   args = parse_args(parser)
 
@@ -221,6 +216,11 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
   os.chdir(OSS_FUZZ_DIR)
   if not os.path.exists(BUILD_DIR):
     os.mkdir(BUILD_DIR)
+
+  if CONTAINER_ENGINE == 'podman':
+    # we do not need to do it for the rest of the files under this path
+    # as the context is inherited from the parent directory
+    fix_selinux_context(BUILD_DIR)
 
   # We have different default values for `sanitizer` depending on the `engine`.
   # Some commands do not have `sanitizer` argument, so `hasattr` is necessary.
