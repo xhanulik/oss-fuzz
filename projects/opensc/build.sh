@@ -14,6 +14,12 @@
 # limitations under the License.
 #
 ################################################################################
+git clone https://github.com/opendnssec/SoftHSMv2.git
+cd "$SRC/opensc/SoftHSMv2"
+./autogen.sh
+./configure --prefix="$SRC/opensc/SoftHSMv2" --disable-shared --enable-static
+make install
+cd "$SRC/opensc"
 
 ./bootstrap
 # FIXME FUZZING_LIBS="$LIB_FUZZING_ENGINE" fails with some missing C++ library, I don't know how to fix this
@@ -29,3 +35,8 @@ for F in $fuzzerFiles; do
         zip -j $OUT/${fuzzerName}_seed_corpus.zip $SRC/opensc/src/tests/fuzzing/corpus/${fuzzerName}/*
     fi
 done
+
+cd "$SRC/opensc/src/tests/fuzzing"
+./setup_softhsm.sh "$SRC/opensc/SoftHSMv2/bin/softhsm2-util"
+cp "$SRC/opensc/src/tests/fuzzing/.softhsm2.conf" $OUT
+cp -r "$SRC/opensc/src/tests/fuzzing/.tokens" $OUT
