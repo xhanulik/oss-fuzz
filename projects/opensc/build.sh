@@ -14,10 +14,19 @@
 # limitations under the License.
 #
 ################################################################################
+if [ ! -d SoftHSMv2 ]; then
+   git clone https://github.com/opendnssec/SoftHSMv2.git
+fi
+pushd "$SRC/opensc/SoftHSMv2"
+./autogen.sh
+./configure --prefix="$SRC/opensc/SoftHSMv2" --enable-static
+make install
+popd
 
 ./bootstrap
 # FIXME FUZZING_LIBS="$LIB_FUZZING_ENGINE" fails with some missing C++ library, I don't know how to fix this
-./configure --disable-optimization --disable-shared --disable-pcsc --enable-ctapi --enable-fuzzing FUZZING_LIBS="$LIB_FUZZING_ENGINE"
+./configure --disable-optimization --disable-shared --disable-pcsc --enable-ctapi --enable-softhsm-fuzzing --enable-fuzzing FUZZING_LIBS="$LIB_FUZZING_ENGINE"
+make clean
 make -j4
 
 fuzzerFiles=$(find $SRC/opensc/src/tests/fuzzing/ -name "fuzz_*.c")
@@ -29,3 +38,8 @@ for F in $fuzzerFiles; do
         zip -j $OUT/${fuzzerName}_seed_corpus.zip $SRC/opensc/src/tests/fuzzing/corpus/${fuzzerName}/*
     fi
 done
+
+cd "$SRC/opensc/src/tests/fuzzing"
+./setup_softhsm.sh "$SRC/opensc/SoftHSMv2/src/bin/util/softhsm2-util"
+cp "$SRC/opensc/src/tests/fuzzing/.softhsm2.conf" $OUT
+cp -r "$SRC/opensc/src/tests/fuzzing/.tokens" $OUT
