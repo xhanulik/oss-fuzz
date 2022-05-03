@@ -911,6 +911,11 @@ def build_fuzzers_impl(  # pylint: disable=too-many-arguments,too-many-locals,to
           '%s:%s' % (_get_absolute_path(source_path), workdir),
       ]
 
+  # for podman, we need to make sure the containers have SYS_PTRACE
+  # capabilities to be able to execute leak sanitizer binaries
+  if CONTAINER_ENGINE == 'podman':
+    command += ['--cap-add', 'SYS_PTRACE']
+
   command += [
       '-v', f'{project_out}:/out', '-v', f'{project.work}:/work',
       f'gcr.io/oss-fuzz/{project.name}'
