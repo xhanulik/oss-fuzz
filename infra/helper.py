@@ -895,11 +895,13 @@ def build_fuzzers_impl(  # pylint: disable=too-many-arguments,too-many-locals,to
 
   command = _env_to_docker_args(env)
   if source_path:
+    if CONTAINER_ENGINE == 'podman':
+      modifier = ":z"
     workdir = _workdir_from_dockerfile(project)
     if mount_path:
       command += [
           '-v',
-          '%s:%s' % (_get_absolute_path(source_path), mount_path),
+          '%s:%s%s' % (_get_absolute_path(source_path), mount_path, modifier),
       ]
     else:
       if workdir == '/src':
@@ -908,7 +910,7 @@ def build_fuzzers_impl(  # pylint: disable=too-many-arguments,too-many-locals,to
 
       command += [
           '-v',
-          '%s:%s' % (_get_absolute_path(source_path), workdir),
+          '%s:%s%s' % (_get_absolute_path(source_path), workdir, modifier),
       ]
 
   # for podman, we need to make sure the containers have SYS_PTRACE
@@ -1467,14 +1469,17 @@ def run_fuzzer(args):
   run_args = _env_to_docker_args(env)
 
   if args.corpus_dir:
+    if CONTAINER_ENGINE == 'podman':
+      modifier = ":z"
     if not os.path.exists(args.corpus_dir):
       logger.error('The path provided in --corpus-dir argument does not exist')
       return False
     corpus_dir = os.path.realpath(args.corpus_dir)
     run_args.extend([
         '-v',
-        '{corpus_dir}:/tmp/{fuzzer}_corpus'.format(corpus_dir=corpus_dir,
-                                                   fuzzer=args.fuzzer_name)
+        '{corpus_dir}:/tmp/{fuzzer}_corpus{modifier}'.format(corpus_dir=corpus_dir,
+                                                   fuzzer=args.fuzzer_name,
+                                                   modifier=modifier)
     ])
 
   run_args.extend([
@@ -1622,14 +1627,14 @@ def reproduce_impl(  # pylint: disable=too-many-arguments
   # for podman, we need to make sure the mounted testcase has proper SELinux context
   # to be accessible by the container
   if CONTAINER_ENGINE == 'podman':
-    fix_selinux_context(testcase_path)
+    modifier = ":z"
     run_args += ['--cap-add', 'SYS_PTRACE']
 
   run_args += [
       '-v',
       '%s:/out' % project.out,
       '-v',
-      '%s:/testcase' % _get_absolute_path(testcase_path),
+      '%s:/testcase%s' % (_get_absolute_path(testcase_path), modifier),
       '-t',
       'gcr.io/oss-fuzz-base/%s' % image_name,
       'reproduce',
