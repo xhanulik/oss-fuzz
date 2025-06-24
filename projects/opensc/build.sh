@@ -36,7 +36,15 @@ fuzzerFiles=$(find $SRC/opensc/src/tests/fuzzing/ -name "fuzz_*.c")
 
 for F in $fuzzerFiles; do
     fuzzerName=$(basename $F .c)
-    cp "$SRC/opensc/src/tests/fuzzing/$fuzzerName" $OUT
+    # Copy the original target with changed name
+    cp "$SRC/opensc/src/tests/fuzzing/$fuzzerName" "$OUT/${fuzzerName}.bin"
+
+    # Create wrapper script
+    cat > "$OUT/$fuzzerName" << EOF
+#!/bin/bash
+OPENSC_CONFIG_STRING="app default { card_drivers = old, internal; }" exec "\$(dirname "\$0")/${fuzzerName}.bin" "\$@"
+EOF
+    chmod +x "$OUT/$fuzzerName"
     if [ -d "$SRC/opensc/src/tests/fuzzing/corpus/${fuzzerName}" ]; then
         zip -j $OUT/${fuzzerName}_seed_corpus.zip $SRC/opensc/src/tests/fuzzing/corpus/${fuzzerName}/*
     fi
